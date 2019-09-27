@@ -4,7 +4,7 @@ Title: ROGUE (Ratio of Global Unshifted Entropy)
 Version: 1.0
 Author: Pauling Liu
 Maintainer: Pauling Liu <pauling.liu@pku.edu.cn>
-Description: An entropy-based universal metric for accessing the purity of single cell population
+Description: An entropy-based universal metric for assessing the purity of single cell population
 License: GPL (>=2)
 Encoding: UTF-8
 LazyData: true
