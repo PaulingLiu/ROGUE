@@ -3,7 +3,7 @@ ROGUE is an entropy-based universal metric for accessing the purity of single ce
 
 ## Tutorial
 For more details and basic usage see following tutorials:
-1.	[Installation Instructions for ROGUE and Guided Tutorial](https://github.com/PaulingLiu/ROGUE/tree/master/vignettes/ROGUE_Tutorials.html)
+1.	[Installation Instructions for ROGUE and Guided Tutorial](https://github.com/PaulingLiu/ROGUE/tree/master/vignettes/ROGUE_Tutorials.pdf)
 
 ## Contact
 Please contact us:  
