@@ -7,7 +7,7 @@ For more details and basic usage see following tutorials:
 
 ## Contact
 Please contact us:
-Baolin Liu: pauling.liu@pku.edu.cn
+Baolin Liu: pauling.liu@pku.edu.cn  
 Zemin Zhang: zemin@pku.edu.cn
 
 ## Copyright
