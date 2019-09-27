@@ -1,0 +1,47 @@
+"0","```r
+clusters <- unique(a$ClusterID)
+
+patient.rogue <- function(info, cluster){
+    tmp <- info %>% dplyr::filter(ClusterID == cluster)
+    patients <- unique(info$PatientNumber)
+    rogue <- c()
+    for (i in 1:length(patients)) {
+        print(i)
+        index1 <- tmp %>% dplyr::filter(PatientNumber == patients[i]) %>% dplyr::pull(CellID)
+        if(length(index1) >= 20){
+            tmp.matr <- expr[index1,]
+            tmp.matr <- matr_filter(tmp.matr, min.cells = 10)
+            tmp.res <- SE_fun(tmp.matr, span = 0.5)
+            tmp.res <- matr_toli(tmp.res, tmp.matr, span = 0.5, n = 10)
+            rogue[i] <- cal_rogue(tmp.res)
+        }
+        else{
+            rogue[i] <- NA
+        }
+    }
+    return(rogue)
+}
+
+res <- list()
+
+for (i in 1:length(clusters)) {
+  res[[i]] <- patient.rogue(a, clusters[i])
+}
+
+res.tibble <- Reduce(rbind, res) %>% as.matrix() %>% t() %>% as.tibble()
+colnames(res.tibble) <- clusters
+#c(\"#FF3E96\", \"#EE3A8C\", \"#D02090\")
+res.tibble %>%
+  tidyr::gather(key = clusters, value = ROGUE) %>%
+  ggplot(aes(clusters, ROGUE)) +
+  geom_boxplot(color = \"#FF3E96\", outlier.shape = NA) +
+  geom_point(color = \"#FF3E96\", size = 1.5) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, colour = \"black\"),
+        axis.title = element_text(size = 13, colour = \"black\")) +
+  labs(
+    x = \"Clusters\",
+    y = \"ROGUE\"
+  ) +
+  ylim(0.6,0.97)
+```"

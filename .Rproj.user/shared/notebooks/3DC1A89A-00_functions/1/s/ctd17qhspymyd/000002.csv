@@ -1,0 +1,24 @@
+"0","```r
+```r
+```r
+```r
+silh_fun <- function(matr, label, nGenes = 1000, nPCs = 3){
+  t_matr <- t(matr)
+  HVG <- BrenneckeGetVariableGenes(t_matr, suppress.plot = T, fdr = 2)
+  matr <- matr[,HVG$Gene[1:nGenes]]
+  pca.data <- prcomp(matr, center=TRUE)
+  dd <- as.matrix(dist(pca.data$x[, seq_len(nPCs)]))
+  
+  tibble(
+    label = unique(label$label)
+  ) %>%
+    dplyr::mutate(num = 1:nrow(.)) -> tmp
+  
+  label <- label %>% dplyr::left_join(tmp, by = c(\label\))
+  
+  summary(silhouette(label$num, dd))
+}
+```
+```
+```
+```"

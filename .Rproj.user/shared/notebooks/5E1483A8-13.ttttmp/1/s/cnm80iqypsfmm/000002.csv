@@ -1,0 +1,17 @@
+"0","```r
+use_python(\"/home/heyao/data/tools/basic/anaconda3/bin/python\")
+b.path <- \"/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells\"
+out.path <- \"/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells\"
+
+cell.info <- readr::read_csv(file.path(b.path,\"Thienpont_Tumors_52k_v4_R_fixed.cellInfo.txt\"))
+bloom <- connect(file.path(b.path,\"fibroblasts\"), mode = \"r\")
+b.seurat <- as.Seurat(bloom)
+gene <- readr::read_rds(\"/home/pauling/projects/02_data/09_Gene/coding_gene.rds.gz\")
+
+expr <- b.seurat@assays$RNA@counts
+expr <- t(expr)
+expr <- as.matrix(expr)
+
+overlap.gene <- intersect(gene$gene_name, colnames(expr))
+expr <- expr[,overlap.gene]
+```"

@@ -1,0 +1,40 @@
+"0","```r
+```r
+```r
+kmeans_rouge <- function(matr, info){ 
+  tibble(Cluster = unique(info$Cluster)) %>%
+    dplyr::mutate(
+      matr = purrr::map(
+        .x = Cluster,
+        .f = function(.x){
+          info %>%
+            dplyr::filter(Cluster == .x) %>%
+            dplyr::pull(Barcode) -> barcode
+          
+          tmp_matr <- matr[barcode,]
+          tmp_matr[is.na(tmp_matr)] <- 0
+          return(tmp_matr)
+        }
+      )
+    ) -> tmp_mda
+  
+  tmp_mda %>%
+    dplyr::mutate(
+      ent = purrr::map(
+        .x = matr,
+        .f = function(.x){
+          tmp <- SE_fun(expr = .x, window = 1, span = 0.2)
+          return(tmp)
+      }
+    )
+  ) -> tmp_mda
+  
+  tmp_mda <- tmp_mda %>% 
+    dplyr::mutate(rogue = 1-purrr::map_dbl(ent, cal_rogue)) %>%
+    dplyr::select(-ent, -matr)
+  
+  return(tmp_mda)
+}
+```
+```
+```"

@@ -1,0 +1,45 @@
+"0","```r
+```r
+get_rogue_inc <- function(.x){
+  n_row <- nrow(.x)
+  .x$rogue[[1]] <- .x$rogue[[1]] %>% dplyr::mutate(anc = rogue)
+  tt <- .x
+  res1 <- .x$rogue[[1]]
+  a <- .x$cells[[1]]
+  for (i in 2:n_row) {
+    
+    res2 <- .x$rogue[[i]]
+    
+    
+    b <- .x$cells[[i]]
+    
+    res1 %>%
+      dplyr::mutate(
+        anc = purrr::map_dbl(
+        .x = cluster,
+        .f = function(.x){
+          tmp <- table(Var1 = b[a == .x]) %>% as.tibble()
+          tmp$n <- tmp$n/sum(tmp$n)
+          tmp %>%
+            dplyr::left_join(res2[,c(1,3)], by = c(\Var1\ = \cluster\)) %>%
+            dplyr::mutate(rogue = n*rogue) %>%
+            dplyr::pull(rogue) %>%
+            sum()
+          }
+        )
+      ) -> res1
+    
+    tt$rogue[[i]] <- res1
+  }
+  
+  average.rogue_ <- c()
+  
+  for (i in 1:nrow(.x)) {
+    average.rogue_[i] <- mean(tt$rogue[[i]]$anc)
+  }
+  
+  .x <- .x %>% dplyr::mutate(average.rogue = average.rogue_)
+  return(.x)
+}
+```
+```"

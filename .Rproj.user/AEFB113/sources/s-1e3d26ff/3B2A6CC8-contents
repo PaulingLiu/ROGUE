@@ -1,0 +1,44 @@
+---
+title: "Installation Instructions for SciBet"
+output: 
+  html_document:
+    df_print: paged
+date: "January 1, 2019"
+---
+
+---
+<font face="Arial" size=4>1. Install [R](https://www.r-project.org/) (vesion 3.5 or greater). </font>  
+<font face="Arial" size=4>2. Install [R Studio](https://www.rstudio.com/) (optional). </font>
+
+
+#Installing dependency packages
+<font face="Arial" size=4>Before installing scibet, the following packages should be installed first: </font>  
+
+
+```{}
+install.packages("Rcpp")
+install.packages("RcppEigen")
+install.packages("ggsci")
+install.packages("viridis")
+install.packages("tidyverse")
+```
+
+#Installing SciBet
+<font face="Arial" size=4>SciBet is now available for linux platform. The R package can be downloaded [here](scibet_1.0.tar.gz). To install, run: </font>  
+
+
+```{}
+# Enter the command in linux (bash)
+# This step should be implemented in the default path of R library
+R CMD INSTALL scibet_1.0.tar.gz
+```
+
+<font face="Arial" size=4>Or SciBet could be installed using Rstudio: "Tools" -> "Install packages" -> "Install from: Package Archive File (.tar.gz)". </font>  
+
+<font face="Arial" size=4>Then SciBet can be used in R or R studio </font>  
+
+```{r}
+library(scibet)
+```
+
+<font face="Arial" size=4>If you have any problems during the installation of SciBet, please refer to [FAQ](FAQ.html) </font>

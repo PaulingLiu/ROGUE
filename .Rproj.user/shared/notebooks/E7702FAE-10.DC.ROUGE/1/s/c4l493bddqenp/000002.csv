@@ -1,0 +1,25 @@
+"0","```r
+for (i in 1:6) {
+  p <- SEplot(ent.all.res[[i]], p.adj = T)
+  png.plot <- p + theme_bw() + 
+    theme(legend.position = \"NULL\") + 
+    theme(rect = element_blank(), 
+          text = element_blank(), 
+          axis.ticks = element_blank())
+  
+  ggsave(png.plot, filename = \"./temp.png\", width = 6, height = 4)
+  img <- readPNG(\"./temp.png\")
+  file.remove(\"./temp.png\")
+  blank.plot <- SEplot(ent.all.res[[6]], point_size = -1, p.adj = T)
+  range.values <- c(
+      ggplot_build(plot = blank.plot)$layout$panel_params[[1]]$x.range,
+      ggplot_build(plot = blank.plot)$layout$panel_params[[1]]$y.range
+  )
+  p <- blank.plot +
+      annotation_raster(img, xmin = range.values[1], xmax = range.values[2],
+                        ymin = range.values[3], ymax = range.values[4])
+  ggsave(filename = paste0(DCs[i], \".pdf\"), plot = p, 
+         path = \"/home/pauling/projects/04_SEmodel/04_figures/05_ROGUE/01.pure.DC\", 
+         width = 6, height = 4, units = \"in\")
+}
+```"

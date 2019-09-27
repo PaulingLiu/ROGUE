@@ -1,0 +1,39 @@
+"0","```r
+```r
+matr_filter <- function(.x, min.cells = 10, min.genes = 0){
+  cell_count <- colSums(.x > 0, na.rm = T)
+  gene_count <- rowSums(.x > 0, na.rm = T)
+  
+  lq1 <- cell_count < min.cells
+  lq2 <- gene_count < min.genes
+  
+  return(.x[!lq2, !lq1])
+}
+matr_toli <- function(ent, expr, n = 10, span = 0.1, window = 1, r = 0.01){
+  sig.gene <- ent %>% dplyr::filter(p.adj < 0.05) %>% dplyr::pull(Gene)
+  ng <- length(sig.gene)
+  expr <- expr[,sig.gene]
+  res <- sapply(expr, function(.x){
+    .x <- base::sort(.x, decreasing = T)
+    .x <- .x[-c(1:n)]
+    mean.expr <- mean(.x)
+    entr <- mean(log(.x+1))
+    #.x <- ceiling(.x/window)
+    #tmp <- table(.x) %>% as.tibble()
+    #tmp$n <- tmp$n/sum(tmp$n)
+    #entr <- -sum(tmp$n*log(tmp$n))
+    return(c(mean.expr, entr))
+  })
+  
+  mean.cut <- min(ent$mean.expr)
+  
+  res <- t(res)
+  ent$mean.expr[1:ng] <- log(res[,1]+r)
+  ent$entropy[1:ng] <- res[,2]
+  
+  ent <- ent %>% dplyr::select(-p.adj) %>% dplyr::filter(mean.expr > mean.cut)
+  ent <- entropy_fit(ent, span = span)
+  return(ent)
+}
+```
+```"

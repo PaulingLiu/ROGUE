@@ -1,0 +1,5 @@
+"0","```r
+a <- cell.info %>% dplyr::filter(stringr::str_detect(ClusterName,\"fibroblasts\"))
+#a <- a %>% dplyr::mutate(CellID = stringr::str_replace(CellID, \"_\", \".\"))
+a <- a %>% dplyr::filter(CellID %in% rownames(expr))
+```"

@@ -1,0 +1,141 @@
+"0","```r
+```r
+```r
+rogue_of_mixtures <- function(matr, info, cell_typs, n = 2000, rep = 20){
+  info1 <- info %>% dplyr::filter(label == cell_typs[1])
+  info2 <- info %>% dplyr::filter(label == cell_typs[2])
+  
+  tibble(ratio = c(0,1/21,1/11,1/4,1/2)) %>%
+    dplyr::mutate(
+      rogue = purrr::map(
+        .x = ratio,
+        .f = function(.x){
+          num1 = ceiling(n*.x)
+          num2 = n-num1
+          print(num1)
+          tibble(Rep = 1:rep) %>%
+            dplyr::mutate(
+              rogue = purrr::map_dbl(
+                .x = Rep,
+                .f = function(.x){
+                  index1 <- info1 %>% dplyr::sample_n(num1) %>% dplyr::pull(ID)
+                  index2 <- info2 %>% dplyr::sample_n(num2) %>% dplyr::pull(ID)
+                  index <- c(index1, index2)
+                  expr <- matr[index,]
+                  ent <- SE_fun(expr, span = 0.1)
+                  rogue <- 1 - cal_rogue(ent)
+                  return(rogue)
+                }
+              )
+            ) -> rogue_rep
+        }
+      )
+    ) -> tmp1
+  
+  tibble(ratio = c(0,1/21,1/11,1/4)) %>%
+    dplyr::mutate(
+      rogue = purrr::map(
+        .x = ratio,
+        .f = function(.x){
+          num2 = ceiling(n*.x) #### cell number
+          num1 = n-num2  ####
+          print(num1)
+          tibble(Rep = 1:rep) %>%
+            dplyr::mutate(
+              rogue = purrr::map_dbl(
+                .x = Rep,
+                .f = function(.x){
+                  index1 <- info1 %>% dplyr::sample_n(num1) %>% dplyr::pull(ID)
+                  index2 <- info2 %>% dplyr::sample_n(num2) %>% dplyr::pull(ID)
+                  index <- c(index1, index2)
+                  expr <- matr[index,]
+                  ent <- SE_fun(expr, span = 0.1)
+                  rogue <- 1 - cal_rogue(ent)
+                  return(rogue)
+                }
+              )
+            ) -> rogue_rep
+        }
+      )
+    ) -> tmp2
+  
+  tmp2 <- tmp2[c(4:1),]
+  tmp <- tmp1 %>% dplyr::bind_rows(tmp2)
+  
+  prop <- c(\0:1\,\1:20\,\1:10\,\1:3\,\1:1\,\3:1\,\10:1\,\20:1\,\1:0\)
+  tmp <- tmp %>% dplyr::mutate(prop = prop)
+  tmp <- tmp %>%
+    dplyr::mutate(
+      rogue = purrr::map2(
+        .x = rogue,
+        .y = prop,
+        .f = function(.x, .y){
+          .x %>% dplyr::mutate(prop = .y)
+        }
+      )
+    )
+  
+  tmp <- tmp %>% dplyr::mutate(ID = 1:nrow(.))
+  tmp <- tmp %>%
+    dplyr::mutate(
+      rogue = purrr::map2(
+        .x = rogue,
+        .y = ID,
+        .f = function(.x, .y){
+          .x %>% dplyr::mutate(ID = .y)
+        }
+      )
+    )
+  
+  return(tmp)
+}
+si_of_mixtures <- function(pca_da, info, cell_typs, n = 2000, rep = 20){
+  info1 <- info %>% dplyr::filter(label == cell_typs[1])
+  info2 <- info %>% dplyr::filter(label == cell_typs[2])
+  info_sub <- info %>% dplyr::filter(!(label %in% cell_typs))
+  
+  tibble(ratio = c(0,1/21,1/11,1/4,1/2)) %>%
+    dplyr::mutate(
+      rogue = purrr::map(
+        .x = ratio,
+        .f = function(.x){
+          num1 = ceiling(n*.x)
+          num2 = n-num1
+          print(num1)
+          tibble(Rep = 1:rep) %>%
+            dplyr::mutate(
+              rogue = purrr::map_dbl(
+                .x = Rep,
+                .f = function(.x){
+                  index1 <- info1 %>% dplyr::sample_n(num1) %>% dplyr::pull(ID)
+                  index2 <- info2 %>% dplyr::sample_n(num2) %>% dplyr::pull(ID)
+                  index <- c(index1, index2)
+                  pda <- pca_da[c(index, info_sub$ID),]
+                  info_tmp <- info[c(index, info_sub$ID),]
+                  rownames(info_tmp) <- 1:nrow(info_tmp)
+                  rownames(pda) <- 1:nrow(pda)
+                  
+                  tibble(
+                    label = unique(info_tmp$label)
+                    ) %>%
+                    dplyr::mutate(num = 1:nrow(.)) -> tmp
+  
+                  label <- label %>% dplyr::left_join(tmp, by = c(\label\))
+                  
+                  dd <- dist(pda)
+                  si <- summary(silhouette(info$num, dd))
+                  return(si)
+                }
+              )
+            ) -> rogue_rep
+        }
+      )
+    ) -> tmp1
+  
+  
+  
+  return(tmp1)
+}
+```
+```
+```"

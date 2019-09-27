@@ -1,0 +1,71 @@
+"0","```r
+```r
+```r
+```r
+simul_da <- function(gene_means, r = 2.26, n_gene = 2000, n_cell = 4000){
+  sda <- matrix(data=NA, nrow=n_cell, ncol=n_gene, byrow=FALSE, dimnames=NULL)
+  gene_means <- gene_means[gene_means > 0]
+  u <- median(gene_means)
+  for (i in 1:n_gene) {
+    p <- gene_means[i]/(gene_means[i]+r)
+    tmp <- rnbinom(n=n_cell, prob = 1-p, size = r)
+    #x <- -(mean(tmp)/u - 1.5)
+    #p <- 1/(1+exp(-x))
+    #n <- ceiling(n_cell*p)
+    #tmp[sample(n_cell,n)] <- 0
+    sda[,i] <- tmp
+  }
+  
+  colnames(sda) <- paste(\Gene\, 1:ncol(sda), sep = '')
+  rownames(sda) <- paste(\Cell\, 1:nrow(sda), sep = '')
+  sda <- as.data.frame(sda)
+  sda <- lapply(sda, as.numeric) %>% do.call(\data.frame\, .)
+  return(sda)
+}
+simul_diff <- function(matr, r = 2, n_diff = 200, n_gene = 4000, n_cell = 4000, sub = 0.5, c = 100, r2 = 6){   
+  
+  gene_means <- colMeans(matr)
+  gene_means <- gene_means[gene_means > 0]
+  gene_means <- as.numeric(gene_means)
+  gene_means <- sample(gene_means, n_gene)
+  
+  sda1 <- simul_da(gene_means = gene_means, r = r, n_gene = n_gene, n_cell = n_cell)
+  diff1 <- rep(0, n_diff)
+  diff2 <- rbeta(n_diff, shape1 = 2, shape2 = 5)*c
+  diff3 <- rbeta(n_diff, shape1 = 2, shape2 = 5)*c
+  
+  tmp <- tibble(
+    mean.expr1 = diff1,
+    mean.expr2 = diff2,
+    mean.expr3 = diff3,
+    Gene = sample(colnames(sda1),n_diff)
+  )
+  
+  u <- median(gene_means)
+  
+  simul_expr <- function(.x, .l){
+    p <- .x/(.x+r2)
+    tmp <- rnbinom(.l, prob = 1-p, size = r2)
+    #x <- -(mean(tmp)/u - 1.5)
+    #p <- 1/(1+exp(-x))
+    #n <- ceiling(.l*p)
+    #tmp[sample(.l, n)] <- 0
+    return(tmp)
+  }
+  for (i in 1:nrow(tmp)) {
+    expr1 <- simul_expr(tmp[i,]$mean.expr1, .l = ceiling(n_cell*sub))
+    expr2 <- simul_expr(tmp[i,]$mean.expr2, .l = n_cell - ceiling(n_cell*sub))
+    expr3 <- simul_expr(tmp[i,]$mean.expr3, .l = n_cell)
+    #tmp_expr <- c(sample(expr2, ceiling(length(expr2)/2)), sample(expr3, length(expr3) - ceiling(length(expr2)/2)))
+    #sda1[,tmp[i,]$Gene] <- c(expr1, expr2)
+    sda1[,tmp[i,]$Gene] <- expr3
+  }
+  sda1 <- as.data.frame(sda1)
+  sda1 <- lapply(sda1, as.numeric) %>% do.call(\data.frame\, .)
+  sda <- list(sda1, tmp)
+  return(sda)
+}
+```
+```
+```
+```"

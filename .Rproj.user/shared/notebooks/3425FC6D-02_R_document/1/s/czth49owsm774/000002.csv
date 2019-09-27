@@ -1,0 +1,4 @@
+"0","```r
+path_da <- \"/home/pauling/projects/02_data/02_CRC_Tcell/CRC_subtype_tpm.rds.gz\"
+expr <- readr::read_rds(path = path_da)
+```"

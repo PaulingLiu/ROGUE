@@ -1,0 +1,223 @@
+---
+title: "Expression entropy model, E-test and SciBet"
+output: html_notebook
+---
+
+---
+>In this example workflow, we demonstrate a unified model and three novel methods we recently developed in our preprint, A unified entropy-based model for single cell expression data analysis:
+
+>- A unified expression entropy model that describes the analytical relationship between expression entropy and mean gene expression.
+>- Unsupervised informative genes selection using entropy reduction.
+>- E(ntropy)-test for supervised gene selection.
+>- Single cell identifier based on entropy test (SciBet).
+>
+>For illustration, we've chosen a [T cell dataset](https://doi.org/10.1038/s41586-018-0694-x) we recently published to get started. The TPM expression matrix can be downloaded [here](aa).
+
+
+#Library
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(scibet)
+library(viridis)
+```
+
+#Load the data
+```{r}
+path_da <- "~/CRC_subtype_tpm.rds.gz"
+expr <- readr::read_rds(path = path_da)
+```
+
+>For expression matrix (TPM), rows should be cells and the last column should be "label".
+
+```{r}
+head(expr$label)
+```
+
+
+```{r echo=FALSE, results='asis'}
+kable(expr[1:10,1:10], caption = 'A knitr kable.')
+```
+
+Expression entropy calculation and application of our unified model
+```{r}
+entropy <- function(expr){
+  
+  ent_res <- tibble(
+    gene = colnames(expr),
+    mean.expr = colMeans(expr),
+    entropy = -scibet::Entropy(expr)
+  )
+  
+  ent_res %>%
+    dplyr::filter(mean.expr < 6000) %>%
+    dplyr::mutate(fit = 0.18*log(0.03*mean.expr + 1)) -> ent_res
+  
+  ent_res %>%
+    dplyr::filter(mean.expr > 2000) %>%
+    dplyr::mutate(k = entropy/fit) %>%
+    dplyr::pull(k) %>%
+    quantile(0.75) %>%
+    as.numeric() -> k
+  
+  ent_res %>%
+    dplyr::mutate(norm_ent = entropy/k) %>%
+    dplyr::mutate(ds = norm_ent - fit) %>%
+    dplyr::arrange(ds)
+}
+
+ent_res <- entropy(expr[,-ncol(expr)])
+
+ent_res %>%
+  dplyr::mutate(sig = as.character(1:nrow(ent_res))) %>%
+  dplyr::mutate(sig = ifelse(sig %in% as.character(1:10), sig, as.character(0))) %>%
+  dplyr::mutate(size = ifelse(sig %in% as.character(1:10), 1.4, 1)) %>%
+  dplyr::mutate(Gene = ifelse(sig %in% as.character(1:10), gene, NA)) %>%
+  ggplot(aes(mean.expr, norm_ent)) +
+  geom_point(aes(colour = sig, size = size)) +
+  geom_text(aes(label = Gene), vjust = 0.5, hjust = -0.1) +
+  scale_size(range = c(1,3)) +
+  scale_colour_manual(values = c("#1E90FF",rainbow(10))) +
+  geom_line(aes(mean.expr, fit), colour = 'black', lwd = 0.9) +
+  theme_classic() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_text(size = 15),
+    axis.text = element_text(size = 15),
+    legend.title = element_text(size = 15),
+    legend.text = element_text(size = 15),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black")
+  ) +
+  labs(
+    x = "mean expression",
+    y = "expression entropy"
+  ) +
+  ylim(0,1)
+```
+
+Supervised gene selection with E-test
+```{r}
+etest_gene <- SelectGene(expr, k = 50, a = 0)
+etest_gene
+```
+
+Visualization of selected genes
+```{r, fig.width=14, fig.height=5}
+type_expr <- expr %>%
+    tidyr::nest(-label) %>%
+    dplyr::rename(expr = data) %>%
+    dplyr::mutate(colmeans = purrr::map(
+      .x = expr,
+      .f = function(.x){colMeans(.x)}))
+  
+type_expr$colmeans %>%
+    as.data.frame() %>%
+    tibble::remove_rownames() %>%
+    t() %>%
+    as.data.frame() %>%
+    tibble::remove_rownames() -> type_mean_expr
+  
+rownames(type_mean_expr) <- type_expr$label
+colnames(type_mean_expr) <- colnames(expr)[-ncol(expr)]
+  
+sub_expr <- type_mean_expr[,etest_gene]
+sub_expr <- sub_expr %>% 
+  as.tibble() %>% 
+  dplyr::mutate_all(funs((. - mean(.))/sd(.))) %>%
+  t()
+
+colnames(sub_expr) <- type_expr$label
+
+get_label <- function(num){
+  v <- sub_expr[num,] 
+  colnames(sub_expr)[which(v == max(v))]
+}
+
+sub_expr <- sub_expr %>% 
+  tibble::as.tibble() %>%
+  dplyr::mutate(group = purrr::map_chr(1:50, get_label))
+
+sub_expr <- as.data.frame(sub_expr)
+rownames(sub_expr) <- etest_gene
+
+sub_expr <- sub_expr %>% 
+  dplyr::mutate(gene = etest_gene) %>%
+  tidyr::gather(key = 'cell_type', value = 'zscore', -group, -gene) %>%
+  dplyr::arrange(group, desc(zscore))
+
+sub_expr %>%
+  ggplot(aes(factor(gene, levels = unique(sub_expr$gene)),
+             factor(cell_type, levels = sort(unique(sub_expr$cell_type), decreasing = T)))) +
+  geom_point(aes(size = zscore, colour = zscore)) +
+  theme(
+    strip.text.x = element_blank(),
+    axis.title = element_text(size = 15),
+    axis.text = element_text(size = 13),
+    legend.title = element_text(size = 13),
+    legend.text = element_text(size = 13),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black", angle = -90, hjust = 0),
+    panel.background = element_rect(colour = "black", fill = "white"),
+    panel.grid = element_line(colour = "grey", linetype = "dashed"),
+    panel.grid.major = element_line(
+      colour = "grey",
+      linetype = "dashed",
+      size = 0.2
+    )
+  ) +
+  facet_grid(. ~ group, scales = "free", space = "free") +
+  scale_colour_distiller(palette = "RdYlBu") +
+  labs(
+    x = '',
+    y = ''
+  )
+```
+
+Single cell classification
+```{r}
+tibble(
+  ID = 1:nrow(expr),
+  label = expr$label
+) %>%
+  dplyr::sample_frac(0.7) %>%
+  dplyr::pull(ID) -> ID
+
+train_set <- expr[ID,]
+test_set <- expr[-ID,]
+
+
+prd <- SciBet(train_set, test_set[,-ncol(test_set)])
+```
+
+Visualization
+```{r}
+tibble(
+  ori = test_set$label,
+  prd = prd
+) %>%
+  dplyr::count(ori, prd) %>%
+  tidyr::spread(key = prd, value = n) -> cross.validation.filt
+
+cross.validation.filt[is.na(cross.validation.filt)] = 0
+cross.validation.filt[,-1] <- round(cross.validation.filt[,-1]/rowSums(cross.validation.filt[,-1]),2)
+cross.validation.filt <- cross.validation.filt %>%
+  tidyr::gather(key = 'prd', value = 'Prob', -ori) 
+  
+cross.validation.filt %>%
+  ggplot(aes(ori,prd,fill = Prob)) +
+  geom_tile() +
+  theme(axis.title = element_text(size = 0)) +
+  theme(axis.text = element_text(size = 10)) +
+  theme(legend.title = element_text(size = 0)) +
+  theme(legend.text = element_text(size = 10)) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
+  theme(axis.text.y = element_text(color="black"),
+        axis.text.x = element_text(color="black",angle = 45, hjust = 1)) +
+  scale_fill_viridis()
+```
+

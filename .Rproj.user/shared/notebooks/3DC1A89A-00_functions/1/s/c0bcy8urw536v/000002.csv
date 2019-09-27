@@ -1,0 +1,29 @@
+"0","```r
+```r
+```r
+```r
+get_sim_res <- function(matr = matr, .x = 0, .y = 5, r = 2, r2 = 6){
+  sda <- simul_diff(matr = matr, sub = .x, n_diff = 200, n_gene = 5000, c = .y, r = r, r2 = r2)
+  res1 <- SE_fun(sda[[1]], span = 0.1)
+  res2 <- m3d_fun(sda[[1]])
+  res3 <- Gini_fun(sda[[1]])
+  res4 <- HVG_fun(sda[[1]])
+
+ tibble(res = list(res1,res2,res3,res4),
+        method = c('SE','M3Drop','Gini','HVG')) %>%
+   dplyr::mutate(
+     auc = purrr::map_dbl(
+     .x = res,
+     .f = function(.x){
+       cal_auc(.x, sda[[2]]$Gene)
+          }
+        )
+      ) %>%
+  dplyr::mutate(c = .y) %>%
+  dplyr::mutate(sub = .x) %>% 
+  dplyr::select(-res)
+}
+```
+```
+```
+```"

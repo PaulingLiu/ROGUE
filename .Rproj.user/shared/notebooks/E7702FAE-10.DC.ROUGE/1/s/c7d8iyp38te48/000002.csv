@@ -1,0 +1,4 @@
+"0","```r
+meta <- meta %>%
+  tidyr::separate(NAME, c(\"A\",\"B\",\"C\",\"D\"), sep = \"\\_\")
+```"

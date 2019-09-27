@@ -1,0 +1,27 @@
+"0","```r
+```r
+```r
+entropy_fit <- function(.x, span = 0.05){
+  .x <- .x %>% dplyr::filter(is.finite(mean.expr)) %>% dplyr::filter(entropy > 0)
+  fit <- loess(entropy~mean.expr, data = .x, span=span)
+  prd <- predict(fit, .x$mean.expr)
+  .x %>%
+    dplyr::mutate(fit = prd) %>%
+    dplyr::mutate(ds = fit - entropy) %>%
+    dplyr::mutate(pv = 1-pnorm(.$ds, mean = mean(.$ds), sd = sd(.$ds))) %>%
+    dplyr::filter(pv > 0.05) -> tmp
+  
+  fit <- loess(entropy~mean.expr, data = tmp, span=span)
+  prd <- predict(fit, .x$mean.expr)
+  .x %>%
+    dplyr::mutate(fit = prd) %>%
+    dplyr::mutate(ds = fit - entropy) %>%
+    dplyr::filter(is.finite(ds)) -> .x
+  
+  .x <- .x %>% dplyr::mutate(p.value = 1-pnorm(.x$ds, mean = mean(.x$ds), sd = sd(.x$ds)))
+  p.adj <- p.adjust(.x$p.value, method = \BH\)
+  .x <- .x %>% dplyr::mutate(p.adj = p.adj) %>% dplyr::arrange(desc(ds))
+}
+```
+```
+```"

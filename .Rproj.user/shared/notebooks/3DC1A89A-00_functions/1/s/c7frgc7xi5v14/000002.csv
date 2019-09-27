@@ -1,0 +1,48 @@
+"0","```r
+```r
+```r
+SEplot <- function(.x, point_size = 1, geom_line = T){
+  if(geom_line){
+    .x %>%
+        ggplot(aes(mean.expr, entropy)) +
+        geom_point(colour = '#1E90FF', size = point_size) +
+        geom_line(aes(mean.expr, fit), lwd = 0.7) +
+        theme_bw() +
+        theme(
+            axis.title = element_text(size = 15,color=\black\),
+            axis.text = element_text(size = 15,color=\black\),
+            legend.title = element_text(size = 0),
+            legend.text = element_text(size = 0),
+            axis.text.y = element_text(color=\black\),
+            axis.text.x = element_text(color=\black\)
+        ) +
+        labs(
+            x = \log(mean expression)\,
+            y = \expression entropy\
+        )
+  }
+  else{
+    .x %>%
+        ggplot(aes(mean.expr, entropy)) +
+        geom_point(colour = '#1E90FF', size = point_size) +
+        #geom_line(aes(mean.expr, fit), lwd = 0.7) +
+        theme_bw() +
+        theme(
+            axis.title = element_text(size = 15,color=\black\),
+            axis.text = element_text(size = 15,color=\black\),
+            legend.title = element_text(size = 0),
+            legend.text = element_text(size = 0),
+            axis.text.y = element_text(color=\black\),
+            axis.text.x = element_text(color=\black\)
+        ) +
+        labs(
+            x = \log(mean expression)\,
+            y = \expression entropy\
+        )
+  }
+    
+    
+}
+```
+```
+```"

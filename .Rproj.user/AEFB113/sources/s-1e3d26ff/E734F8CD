@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1569332859190.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "E734F8CD",
+    "lastKnownWriteTime" : 1569485339,
+    "last_content_update" : 1569485339720,
+    "path" : "~/projects/04_SEmodel/06_R_package/ROGUE/R/ROGUE.R",
+    "project_path" : "R/ROGUE.R",
+    "properties" : {
+        "cursorPosition" : "309,102",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

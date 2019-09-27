@@ -1,0 +1,133 @@
+---
+title: "ROGUE"
+output: 
+  html_document:
+    df_print: paged
+date: "September 26, 2019"
+---
+
+************
+
+# Description
+
+<font face="Arial" size=4>Often, it is not even clear whether a given cluster is uniform in unsupervised scRNA-seq data analyses. Here, we proposed the concept of cluster purity and introduced a conceptually novel statistic, named ROGUE, to examine whether a given cluster is a pure cell population.</font> 
+
+---
+
+
+### Installation instructions for ROGUE
+
+<font face="Arial" size=4>1. Install [R](https://www.r-project.org/) (vesion 3.5 or greater). </font>  
+<font face="Arial" size=4>2. Install [R Studio](https://www.rstudio.com/) (optional). </font>
+
+************
+
+### Installing dependency package
+
+<font face="Arial" size=4>Before installing ROGUE, the "tidyverse" package should be installed first: </font>  
+
+```{}
+install.packages("tidyverse")
+```
+
+************
+### Installing ROGUE
+
+<font face="Arial" size=4>To install ROGUE, run: </font>  
+```{}
+if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+devtools::install_github("Pauling/ROGUE")
+```
+
+****************
+
+
+# Vignettes
+
+<font face="Arial" size=4>In this example workflow, we will be analyzing a previously reported dataset of dendritic cells [(DCs)](https://www.cell.com/immunity/fulltext/S1074-7613(19)30126-8). Here we provide the [expression matrix](bbb) and [meta information](bbb). </font>
+
+***************
+
+### Library
+
+```{r}
+suppressMessages(library(ROGUE))
+suppressMessages(library(ggplot2))
+suppressMessages(library(tidyverse))
+```
+
+
+### Load the data
+```{r}
+expr <- readr::read_rds(path = "~/DC.rds.gz")
+meta <- readr::read_rds(path = "~/meta.rds.gz")
+```
+
+<font face="Arial" size=4>For expression matrices, rows should be genes and columns should be cells. The expression value should be UMI counts (droplet-based datasets) or TPM (full-length based datasets). </font>
+
+```{r}
+expr[1:5, 1:4]
+```
+
+### Meta information
+
+<font face="Arial" size=4>The column 'ct' contains corresponding cell subtypes and column 'sample' contains samples (e.g. patients) to which each cell belongs. </font>
+
+```{r}
+head(meta)
+```
+
+
+### Filtering out low-abundance genes and low-quality cells
+
+<font face="Arial" size=4>The `matr.filter` function allows you to filter out low-abundance genes and low-quality cells based on user-defined criteria. </font>
+
+```{r, warning=FALSE}
+expr <- matr.filter(expr, min.cells = 10, min.genes = 10)
+```
+
+
+### Expression entropy model
+
+<font face="Arial" size=4>To apply the S-E model, we calculate the expression entropy for each gene using `SE_fun` function. </font>
+
+```{r, warning=FALSE}
+ent.res <- SE_fun(expr)
+head(ent.res)
+```
+
+### S-E plot
+
+<font face="Arial" size=4>We use `SEplot` function to visualize the relationship between S and E. </font>
+
+```{r}
+SEplot(ent.res)
+```
+
+>- <font face="Arial" size=4>The identified highly informative genes could be applied to both clustering and pseudotime analyses. </font>
+
+***************
+
+### ROGUE calculation
+
+<font face="Arial" size=4>To access the purity of this DC population, we can calculate the ROGUE value using the `CalculateRogue` function. This population received a ROGUE value of 0.72, thus confirming their heterogeneity. </font>
+```{r pressure, echo=FALSE}
+rogue.value <- CalculateRogue(ent.res, platform = "UMI")
+rogue.value
+```
+
+### Calculate the ROGUE value of each putative cluster for each sample
+
+<font face="Arial" size=4>In order to obtain an accurate estimate of the purity of each cluster, we recommend calculating the ROGUE value of each cell type in different samples. </font>
+
+```{r warning=FALSE}
+rogue.res <- rogue(expr, labels = meta$ct, samples = meta$Patient, platform = "UMI", span = 0.6)
+rogue.res
+```
+
+### Visualize ROGUE values on a boxplot
+
+```{r, fig.width=6, fig.height=5, warning=FALSE}
+rogue.boxplot(rogue.res)
+```
+

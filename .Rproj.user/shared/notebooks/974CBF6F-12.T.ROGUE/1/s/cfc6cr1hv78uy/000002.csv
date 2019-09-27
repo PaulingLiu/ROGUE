@@ -1,0 +1,43 @@
+"0","```r
+meta <- tibble(celltype = matr$label)
+matr <- matr[,-ncol(matr)]
+matr <- matr_filter(matr, min.cells = 10)
+labels <- unique(meta$celltype)
+labels <- labels[c(5,3,13,16,18,20)]
+ent.all.res <- list()
+for (i in 1:length(labels)) {
+  index5 <- meta %>% dplyr::filter(celltype %in% labels[i]) %>% dplyr::pull(ID)
+  expr <- matr[index5,]
+  #expr <- matr_filter(expr, min.cells = 3)
+  ent.all.res[[i]] <- SE_fun(expr, span = 0.3, r = 1)
+}
+ent_res <- SE_fun(expr, span = 0.5, r = 0.01)
+for (i in 1:6) {
+  print(cal_rogue(ent.all.res[[i]], k = 500))
+}
+p <- SEplot(all, geom_line = T, p.adj = T)
+
+for (i in 1:6) {
+  p <- SEplot(ent.all.res[[i]], p.adj = T)
+  png.plot <- p + theme_bw() + 
+    theme(legend.position = \"NULL\") + 
+    theme(rect = element_blank(), 
+          text = element_blank(), 
+          axis.ticks = element_blank())
+  
+  ggsave(png.plot, filename = \"./temp.png\", width = 6, height = 4)
+  img <- readPNG(\"./temp.png\")
+  file.remove(\"./temp.png\")
+  blank.plot <- SEplot(ent.all.res[[6]], point_size = -1, p.adj = T)
+  range.values <- c(
+      ggplot_build(plot = blank.plot)$layout$panel_params[[1]]$x.range,
+      ggplot_build(plot = blank.plot)$layout$panel_params[[1]]$y.range
+  )
+  p <- blank.plot +
+      annotation_raster(img, xmin = range.values[1], xmax = range.values[2],
+                        ymin = range.values[3], ymax = range.values[4])
+  ggsave(filename = paste0(labels[i], \".pdf\"), plot = p, 
+         path = \"/home/pauling/projects/04_SEmodel/04_figures/05_ROGUE/01.pure.Tcell\", 
+         width = 6, height = 4, units = \"in\")
+}
+```"

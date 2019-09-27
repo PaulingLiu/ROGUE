@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1569480162670.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3B2A6CC8",
+    "lastKnownWriteTime" : 1558673496,
+    "last_content_update" : 1558673496,
+    "path" : "~/projects/01_classifier/02_scripts/06_figures/06_Install.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "26,155",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

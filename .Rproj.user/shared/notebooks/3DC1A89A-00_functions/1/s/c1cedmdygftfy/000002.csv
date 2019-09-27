@@ -1,0 +1,15 @@
+"0","```r
+```r
+```r
+```r
+cal_auc <- function(.x, gene){
+  .x <- .x %>% dplyr::mutate(diff = ifelse(Gene %in% gene, 1, 0))
+  pred <- prediction(.x$p.value, .x$diff)
+  perf <- performance(pred,'auc')
+  auc <- 1-perf@y.values[[1]]
+  return(auc)
+}
+```
+```
+```
+```"

@@ -1,0 +1,5 @@
+"0","```r
+for (i in 1:6) {
+  print(cal_rogue(ent.all.res[[i]], k = 200))
+}
+```"

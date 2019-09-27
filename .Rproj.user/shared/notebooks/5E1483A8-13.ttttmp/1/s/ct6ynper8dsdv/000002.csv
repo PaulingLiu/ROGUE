@@ -1,0 +1,13 @@
+"0","```r
+a %>%
+  dplyr::filter(ClusterID == 10) %>%
+  dplyr::filter(PatientNumber == \"1\") %>%
+  dplyr::pull(CellID) -> index1
+
+sub.expr <- expr[index1,]
+sub.expr <- matr_filter(sub.expr, min.cells = 10)
+ent.res <- SE_fun(sub.expr, span = 0.3, r = 1)
+ent.res <- matr_toli(ent.res, sub.expr, span = 0.3, n = 10, r = 1)
+
+SEplot(ent.res, p.adj = T)
+```"

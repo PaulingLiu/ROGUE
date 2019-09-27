@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1569479692518.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "B680E84A",
+    "lastKnownWriteTime" : 1548814431,
+    "last_content_update" : 1548814431,
+    "path" : "~/projects/01_classifier/02_scripts/06_figures/05_R_document.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "11,3",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

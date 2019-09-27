@@ -1,0 +1,143 @@
+---
+title: "Expression entropy model, E-test and SciBet"
+output: 
+  html_document:
+    df_print: paged
+date: "January 1, 2019"
+---
+
+---
+<font face="Arial" size=4>In this example workflow, we demonstrate a unified model and three novel methods we recently developed in our preprint, A unified entropy-based model for single cell expression data analysis:</font>
+
+>- The unified expression entropy describes the strict analytical relationship between expression entropy and mean gene expression: **S = 0.18·ln(0.03·E+1)**
+>- Unsupervised informative genes selection using entropy reduction.
+>- E(ntropy)-test for supervised gene selection.
+>- Single cell identifier based on entropy test (SciBet).
+
+<font face="Arial" size=4>For illustration, we've chosen a [T cell dataset](https://doi.org/10.1038/s41586-018-0694-x) that we recently published to get started. The TPM expression matrix can be downloaded [here](test.rds.gz).</font>
+
+#Library
+```{r}
+suppressMessages(library(ggplot2))
+suppressMessages(library(tidyverse))
+suppressMessages(library(scibet))
+suppressMessages(library(viridis))
+suppressMessages(library(ggsci))
+```
+
+#Load the data
+```{r}
+path_da <- "~/test.rds.gz"
+expr <- readr::read_rds(path = path_da) 
+```
+
+<font face="Arial" size=4>For expression matrix (TPM), rows should be cells and the last column should be ``"label"``.</font>
+
+```{r}
+expr[1:10, 1:10]
+```
+
+#Expression entropy model
+
+<font face="Arial" size=4>To apply the expression entropy model, we first calculate the expression entropy for each gene (`Entropy`), and then linearly normalize the expression entropy.</font>
+
+```{r, warning=FALSE}
+ent_res <- Entropy(expr[,-ncol(expr)])
+```
+
+<font face="Arial" size=4>In this way, the expression entropy and mean expression of genes can be modelled with our dataset-independent formula. </font>
+
+```{r}
+SEM(ent_res)
+```
+
+
+#Identifying informative genes using entropy reduction</font>
+<font face="Arial" size=4>For datasets with subpopulations, certain genes would exhibit expression deviation in fractions of cells, leading to constrained randomness of its expression distribution and hence the reduction of 𝑆. Accordingly, the aforementioned 𝑆-𝐸 curve could serve as the baseline to estimate the heterogeneity degree of such genes by calculating 𝑆-reduction. </font>
+
+```{r, warning=FALSE}
+DsPlot(ent_res, gene_num = 10)
+```
+
+#E(ntropy)-test for supervised gene selection
+<font face="Arial" size=4>Based on our unified model, we developed E-test for supervised gene selection. This step is implemented with `SelectGene` function. Our use of E-test involves an assumption that there is no heterogeneity within each population and hence 𝑆 could be directly calculated by feeding its corresponding 𝐸 into the 𝑆-𝐸 formula. </font>
+
+```{r}
+etest_gene <- SelectGene(expr, k = 50)
+etest_gene
+```
+
+<font face="Arial" size=4>To verify these genes, we can examine their expression patterns across different cell types with `Marker_heatmap`. </font>
+
+```{r, fig.width=14, fig.height=5}
+Marker_heatmap(expr, etest_gene)
+```
+
+#SciBet: Single Cell Identifier Based on Entropy Test
+<font face="Arial" size=4>For accurate, fast, and robust single cell identification. We developed SciBet using a multinomial-distribution model. This step is implemented with `SciBet` function. </font>
+
+  <font face="Arial" size=4>  1. For reference set,  rows should be cells, column should be genes and the last column should be ``"label"`` (TPM). </font>
+  <font face="Arial" size=4>  2. For query set,  rows should be cells and column should be genes (TPM). </font>
+
+```{r}
+tibble(
+  ID = 1:nrow(expr),
+  label = expr$label
+) %>%
+  dplyr::sample_frac(0.7) %>%
+  dplyr::pull(ID) -> ID
+
+train_set <- expr[ID,]      #construct reference set
+test_set <- expr[-ID,]      #construct query set
+
+prd <- SciBet(train_set, test_set[,-ncol(test_set)])
+```
+
+<font face="Arial" size=4>We can evaluate how well our predicted cell type annotations match the reference with `C_heatmap`. For this dataset, we find that there is a high agreement in cell type identification. </font>
+
+```{r}
+C_heatmap(test_set$label, prd)
+```
+
+#False positive control
+
+<font face="Arial" size=4>Due to the incomplete nature of reference scRNA-seq data collection, cell types excluded from the reference dataset may be falsely predicted to be a known cell type. By applying a null dataset as background, SciBet controls the potential false positives while maintaining high prediction accuracy for cells with types covered by the reference dataset (positive cells). </font>
+
+<font face="Arial" size=4>For illustration, we've chosen a recent [melanoma dataset](https://www.cell.com/cell/fulltext/S0092-8674(18)31178-4) with immunde cells as "positive cells" and the other cells (CAF, maligant cells and endothelial cells) as "negative cells". </font>
+
+>- [reference set](reference.rds.gz)
+>- [query set](query.rds.gz)
+>- [null set](null.rds.gz)
+
+<font face="Arial" size=4>For the purposes of this example, these three datasets are used to get started. </font>
+
+```{r}
+null <- readr::read_rds('~/null.rds.gz')
+reference <- readr::read_rds('~/reference.rds.gz')
+query <- readr::read_rds('~/query.rds.gz')
+```
+
+<font face="Arial" size=4>For query set, “negative cells” account for more than 60%. </font>
+```{r}
+ori_label <- query$label
+table(ori_label)
+```
+
+<font face="Arial" size=4>The confidence score of each query cell is calculated with the function `conf_score`. </font>
+
+```{r}
+query <- query[,-ncol(query)]
+c_score <- conf_score(ref = reference, query = query, null_expr = null, gene_num = 500)
+```
+
+<font face="Arial" size=4>The visualization of above result could be implemented with the function `N_heatmap`. </font>
+
+```{r}
+tibble(
+  ori = ori_label,
+  prd = SciBet(reference, query),
+  c_score = c_score
+) -> res
+
+N_heatmap(res, cutoff = 0.45)
+```

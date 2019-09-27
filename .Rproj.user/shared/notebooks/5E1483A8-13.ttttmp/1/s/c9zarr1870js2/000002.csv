@@ -1,0 +1,12 @@
+"0","```r
+a %>%
+  dplyr::mutate(Embedding = stringr::str_remove(Embedding, \"\\(\")) %>%
+  dplyr::mutate(Embedding = stringr::str_remove(Embedding, \"\\)\")) %>%
+  #dplyr::select(Embedding) %>%
+  tidyr::separate(Embedding, c(\"UMAP_1\", \"UMAP_2\"), sep = \"\\,\") %>%
+  dplyr::mutate(UMAP_1 = as.numeric(UMAP_1), UMAP_2 = as.numeric(UMAP_2)) %>%
+  dplyr::filter(UMAP_1 < -20) %>%
+  ggplot(aes(UMAP_1, UMAP_2)) +
+  geom_point(aes(colour = factor(ClusterID))) +
+  theme_minimal()
+```"
