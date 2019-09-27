@@ -1,5 +1,5 @@
 # ROGUE
-ROGUE is an entropy-based universal metric for accessing the purity of single cell population.
+ROGUE is an entropy-based universal metric for assessing the purity of single cell population.
 
 ## Tutorial
 For more details and basic usage see following tutorials:
