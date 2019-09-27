@@ -6,7 +6,7 @@ For more details and basic usage see following tutorials:
 1.	[Installation Instructions for ROGUE and Guided Tutorial](https://github.com/PaulingLiu/ROGUE/tree/master/vignettes/ROGUE_Tutorials.html)
 
 ## Contact
-Please contact us:
+Please contact us:  
 Baolin Liu: pauling.liu@pku.edu.cn  
 Zemin Zhang: zemin@pku.edu.cn
 
