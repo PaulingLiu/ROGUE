@@ -223,7 +223,7 @@ matr.filter <- function(expr, min.cells = 10, min.genes = 10){
 
 
 #' ROGUE calculation
-#' @description  Using ROGUE to access the purity of single cell population.
+#' @description  Using ROGUE to assess the purity of single cell population.
 #' @param .x A tibble object returned from the SE_fun or entropy_fit function.
 #' @param platform The platform ("UMI" or "full-length") used for generating the tested dataset.
 #' @param cutoff The threshold (adjusted P value) for identifying significant ds. The default threshold is 0.05.
