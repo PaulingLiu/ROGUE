@@ -1,4 +1,4 @@
-# ROGUE
+# ROGUE (Ratio of Global Unshifted Entropy)
 ROGUE is an entropy-based universal metric for assessing the purity of single cell population.
 
 ## Tutorial
