@@ -1,0 +1,144 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+file_path <- '/home/pauling/projects/01_classifier/01_data/05_CrossPlatform/Pancreas'
+file_name <- list.files(path = file_path)
+file_name <- file_name[-3]
+
+tibble(name = file_name) %>%
+  dplyr::mutate(
+    matr = purrr::map(
+      .x = name,
+      .f = function(.x){
+        tmp <- readr::read_rds(path = file.path(file_path, .x))
+        return(tmp)
+      }
+    )
+  ) -> pda
+```
+
+```{r}
+matr1 <- assays(pda$matr[[1]])[['counts']]
+matr2 <- assays(pda$matr[[2]])[['normcounts']]
+matr3 <- assays(pda$matr[[3]])[['counts']]
+matr4 <- assays(pda$matr[[4]])[['normcounts']]
+
+gene2 <- tibble(gene = rownames(matr2)) %>%
+  tidyr::separate(gene, c("gene","chr"), sep = "\\__") %>%
+  dplyr::pull(gene)
+
+rownames(matr2) <- gene2
+
+overlap.gene <- intersect(rownames(matr1), rownames(matr2)) %>%
+  intersect(rownames(matr3)) %>%
+  intersect(rownames(matr4))
+
+matr1 <- t(matr1[overlap.gene,])
+matr2 <- t(matr2[overlap.gene,])
+matr3 <- t(matr3[overlap.gene,])
+matr4 <- t(matr4[overlap.gene,])
+```
+
+```{r}
+Res1 <- SE_fun(matr1, r = 0.1)
+Res2 <- SE_fun(matr2, r = 0.1)
+Res3 <- SE_fun(matr3, r = 0.1)
+Res4 <- SE_fun(matr4, r = 0.1)
+```
+
+```{r}
+res1 <- m3d_fun(matr1)
+res2 <- m3d_fun(matr2)
+res3 <- m3d_fun(matr3)
+res4 <- m3d_fun(matr4)
+```
+
+```{r}
+hes1 <- HVG_fun(matr1)
+hes2 <- HVG_fun(matr2)
+hes3 <- HVG_fun(matr3)
+hes4 <- HVG_fun(matr4)
+```
+
+```{r}
+ges1 <- Gini_fun(matr1)
+ges2 <- Gini_fun(matr2)
+ges3 <- Gini_fun(matr3)
+ges4 <- Gini_fun(matr4)
+```
+
+
+```{r}
+n <- 2000
+va <- c()
+va[1] <- length(intersect(Res1$Gene[1:n], Res2$Gene[1:n]))/n
+va[2] <- length(intersect(Res1$Gene[1:n], Res3$Gene[1:n]))/n
+va[3] <- length(intersect(Res1$Gene[1:n], Res4$Gene[1:n]))/n
+va[4] <- length(intersect(Res2$Gene[1:n], Res3$Gene[1:n]))/n
+va[5] <- length(intersect(Res2$Gene[1:n], Res4$Gene[1:n]))/n
+va[6] <- length(intersect(Res3$Gene[1:n], Res4$Gene[1:n]))/n
+```
+
+```{r}
+vb <- c()
+vb[1] <- length(intersect(res1$Gene[1:n], res2$Gene[1:n]))/n
+vb[2] <- length(intersect(res1$Gene[1:n], res3$Gene[1:n]))/n
+vb[3] <- length(intersect(res1$Gene[1:n], res4$Gene[1:n]))/n
+vb[4] <- length(intersect(res2$Gene[1:n], res3$Gene[1:n]))/n
+vb[5] <- length(intersect(res2$Gene[1:n], res4$Gene[1:n]))/n
+vb[6] <- length(intersect(res3$Gene[1:n], res4$Gene[1:n]))/n
+```
+
+```{r}
+vc <- c()
+vc[1] <- length(intersect(hes1$Gene[1:n], hes2$Gene[1:n]))/n
+vc[2] <- length(intersect(hes1$Gene[1:n], hes3$Gene[1:n]))/n
+vc[3] <- length(intersect(hes1$Gene[1:n], hes4$Gene[1:n]))/n
+vc[4] <- length(intersect(hes2$Gene[1:n], hes3$Gene[1:n]))/n
+vc[5] <- length(intersect(hes2$Gene[1:n], hes4$Gene[1:n]))/n
+vc[6] <- length(intersect(hes3$Gene[1:n], hes4$Gene[1:n]))/n
+```
+
+```{r}
+vd <- c()
+vd[1] <- length(intersect(ges1$Gene[1:n], ges2$Gene[1:n]))/n
+vd[2] <- length(intersect(ges1$Gene[1:n], ges3$Gene[1:n]))/n
+vd[3] <- length(intersect(ges1$Gene[1:n], ges4$Gene[1:n]))/n
+vd[4] <- length(intersect(ges2$Gene[1:n], ges3$Gene[1:n]))/n
+vd[5] <- length(intersect(ges2$Gene[1:n], ges4$Gene[1:n]))/n
+vd[6] <- length(intersect(ges3$Gene[1:n], ges4$Gene[1:n]))/n
+```
+
+```{r}
+tibble(
+  `S-E` = va,
+  M3Drop = vb,
+  HVG = vc,
+  Gini = vd
+) %>%
+  tidyr::gather(key = "methods", value = "Reproducibility") %>%
+  ggplot(aes(factor(methods, levels = c("S-E","Gini","M3Drop","HVG")), Reproducibility)) +
+  geom_boxplot(aes(colour = methods)) +
+  geom_point(aes(colour = methods), size = 2) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_text(size = 15),
+    axis.text = element_text(size = 15),
+    legend.title = element_text(size = 0),
+    legend.text = element_text(size = 13),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()
+  ) +
+  scale_colour_manual(values = c("#EE6AA7", "#00868B", "#FF7F24", "#009ACD")) +
+  labs(
+    y = "Reproducibility",
+    x = " "
+  )
+```
+

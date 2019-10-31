@@ -1,0 +1,70 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# pure cell populations Fig 2
+
+```{r, fig.width=6, fig.height=4}
+matr %>% readr::write_rds("/home/pauling/projects/04_SEmodel/01_data/01_positive_datasets/02_10X_data/02_pbmc_facs/matr_facs.rds.gz", compress = "gz")
+ercc_path <- '/home/pauling/projects/02_data/08_10X_data/ERCC/filtered_matrices_mex/ercc92'
+eda <- Read10X(data.dir = ercc_path)
+eda <- as.matrix(eda)
+eda <- t(eda)
+ent.res.ercc <- SE_fun(eda, r = 1, span = 0.1)
+SEplot(ent.res.ercc, p.adj = T, point_size = 1.5)
+```
+
+```{r}
+mda %>%
+  dplyr::mutate(
+    ent_res = purrr::map(
+      .x = matr,
+      .f = function(.x){
+        a <- SE_fun(.x, r = 1, span = 0.1)
+        return(a)
+      }
+    )
+  ) -> mda
+
+mda %>%
+  dplyr::mutate(
+    rogue = purrr::map_dbl(
+      .x = ent_res,
+      .f = function(.x){
+        a <- cal_rogue(.x)
+        return(a)
+      }
+    )
+  ) -> mda
+```
+
+```{r}
+label <- mda$label
+label <- stringr::str_replace(label, pattern = " ", replacement = ".")
+for (i in 1:length(label)) {
+  p <- SEplot(mda$ent_res[[i]], p.adj = T)
+  ggsave(filename = paste0(label[i], ".pdf"), plot = p, 
+         path = "/home/pauling/projects/04_SEmodel/04_figures/05_ROGUE/01.pure.cell.population", 
+         width = 6, height = 4, units = "in")
+}
+```
+
+```{r, fig.width=6, fig.height=4}
+p <- SEplot(ent.res.ercc, p.adj = T)
+png.plot <- p + theme_void() + theme(legend.position = "NULL")
+ggsave(png.plot, filename = "./temp.png", width = 6, height = 4)
+img <- readPNG("./temp.png")
+file.remove("./temp.png")
+blank.plot <- SEplot(ent.res.ercc, point_size = -1, p.adj = T)
+range.values <- c(
+    ggplot_build(plot = blank.plot)$layout$panel_params[[1]]$x.range,
+    ggplot_build(plot = blank.plot)$layout$panel_params[[1]]$y.range
+)
+
+p <- blank.plot +
+     annotation_raster(img, xmin = range.values[1], xmax = range.values[2],
+                       ymin = range.values[3], ymax = range.values[4])
+p
+```
+

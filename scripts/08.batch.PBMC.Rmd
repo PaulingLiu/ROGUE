@@ -1,0 +1,133 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+ctrl.data <- read.table(file = "/home/pauling/projects/04_SEmodel/05_data_phase2/03.Batch/01.seuratv3.panc/PBMC/immune_control_expression_matrix.txt.gz", sep = "\t")
+stim.data <- read.table(file = "/home/pauling/projects/04_SEmodel/05_data_phase2/03.Batch/01.seuratv3.panc/PBMC/immune_stimulated_expression_matrix.txt.gz", sep = "\t")
+```
+
+```{r}
+# Set up control object
+ctrl <- CreateSeuratObject(counts = ctrl.data, project = "IMMUNE_CTRL", min.cells = 5)
+ctrl$stim <- "CTRL"
+a <- subset(ctrl, subset = nFeature_RNA > 500)
+ctrl <- NormalizeData(ctrl, verbose = FALSE)
+ctrl <- FindVariableFeatures(ctrl, selection.method = "vst", nfeatures = 2000)
+
+# Set up stimulated object
+stim <- CreateSeuratObject(counts = stim.data, project = "IMMUNE_STIM", min.cells = 5)
+stim$stim <- "STIM"
+stim <- subset(stim, subset = nFeature_RNA > 500)
+stim <- NormalizeData(stim, verbose = FALSE)
+stim <- FindVariableFeatures(stim, selection.method = "vst", nfeatures = 2000)
+```
+
+```{r}
+immune.anchors <- FindIntegrationAnchors(object.list = list(ctrl, stim), dims = 1:20)
+immune.combined <- IntegrateData(anchorset = immune.anchors, dims = 1:20, features.to.integrate = intersect(rownames(stim), rownames(ctrl)))
+
+DefaultAssay(immune.combined) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+immune.combined <- ScaleData(immune.combined, verbose = FALSE)
+immune.combined <- RunPCA(immune.combined, npcs = 30, verbose = FALSE)
+# t-SNE and Clustering
+immune.combined <- RunUMAP(immune.combined, reduction = "pca", dims = 1:20)
+immune.combined <- FindNeighbors(immune.combined, reduction = "pca", dims = 1:20)
+immune.combined <- FindClusters(immune.combined, resolution = 0.5)
+
+immune.combined <- RenameIdents(immune.combined, `0` = "CD14 Mono", `1` = "CD4 Naive T", `2` = "CD4 Memory T", 
+    `3` = "CD16 Mono", `4` = "B", `5` = "CD8 T", `6` = "T activated", `7` = "NK", `8` = "DC", `9` = "B Activated", 
+    `10` = "Mk", `11` = "pDC", `12` = "Eryth", `13` = "Mono/Mk Doublets")
+
+DimPlot(immune.combined, reduction = "umap", group.by = "stim")
+DimPlot(immune.combined, reduction = "umap", label = TRUE)
+```
+
+```{r}
+info <- readr::read_tsv("/home/pauling/projects/04_SEmodel/01_data/04_rogue/10_batch/nbt.4096-S3.txt")
+info <- info %>% dplyr::mutate(Cell_Name = stringr::str_replace(Cell_Name, "-", "."))
+info <- info %>% dplyr::filter(Cell_Name %in% colnames(immune.combined))
+info <- as.data.frame(info)
+rownames(info) <- info$Cell_Name
+info <- info[colnames(immune.combined),]
+info$Cluster_ID <- as.character(Idents(immune.combined))
+
+info %>%
+  dplyr::filter(Patient == "1015") %>%
+  dplyr::filter(Cluster_ID == "CD4 Memory T") %>%
+  dplyr::filter(Stim_Condition == "ctrl") %>%
+  dplyr::pull(Cell_Name) %>%
+  stringr::str_replace("-",".") -> index1
+
+index1 <- intersect(index1,colnames(immune.combined))
+
+matr <- immune.combined@assays$integrated@data
+matr <- as.matrix(t(matr))
+matr <- exp(matr) - 1
+matr <- matr_filter(matr, min.cells = 15)
+ent.res <- SE_fun(matr, span = 0.3, r = 1)
+SEplot(ent.res, p.adj = T)
+```
+
+```{r}
+expr <- t(immune.combined@assays$RNA@data)
+expr <- exp(expr) - 1
+expr <- as.matrix(expr)
+clusters <- unique(info$Cluster_ID)
+
+patient.rogue <- function(info, condition, cluster, use.ori = F){
+    tmp <- info %>% dplyr::filter(Stim_Condition %in% condition) %>% dplyr::filter(Cluster_ID == cluster)
+    patients <- unique(tmp$Patient)
+    rogue <- c()
+
+    for (i in 1:length(patients)) {
+        print(i)
+        index1 <- tmp %>% dplyr::filter(Patient == patients[i]) %>% dplyr::pull(Cell_Name)
+        if(length(index1) >= 20){
+          tmp.matr <- matr[index1,]
+          if(isTRUE(use.ori)){
+            tmp.matr <- expr[index1,]
+          }
+          tmp.res <- SE_fun(tmp.matr, span = 0.5)
+          rogue[i] <- cal_rogue(tmp.res, k = 100)
+        }
+        else{
+          rogue[i] <- NA
+        }
+    }
+
+    return(rogue)
+}
+all.p <- list()
+for (i in 1:length(clusters)) {
+    ctrl <- patient.rogue(info, "ctrl", clusters[i])
+    stim <- patient.rogue(info, "stim", clusters[i])
+    comb <- patient.rogue(info, c("ctrl","stim"), clusters[i], use.ori = T)
+    comb.rogue.corrected <- patient.rogue(info, c("ctrl","stim"), clusters[i])
+    
+    tibble(
+        ctrl = ctrl,
+        stim = stim,
+        comb = comb,
+        comb.corrected = comb.rogue.corrected,
+        patient = 1:length(comb.rogue.corrected)
+    ) %>%
+        dplyr::filter(!is.na(comb.corrected)) %>%
+        tidyr::gather(key = "Condition", value = "ROGUE", -patient) %>%
+        ggplot(aes(factor(Condition, levels = c("ctrl","stim","comb","comb.corrected")), ROGUE)) +
+        geom_boxplot(color = "#1979B5", outlier.shape = NA) +
+        geom_point(color = "#1979B5", size = 1.5) +
+        theme_bw() +
+        theme(axis.text = element_text(size = 12, colour = "black"),
+              axis.title = element_text(size = 13, colour = "black")) +
+        labs(
+            x = "Condition",
+            y = "ROGUE"
+        ) -> all.p[[i]]
+}
+```
+

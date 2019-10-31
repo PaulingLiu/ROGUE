@@ -1,0 +1,109 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+use_python("/home/heyao/data/tools/basic/anaconda3/bin/python")
+b.path <- "/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells"
+out.path <- "/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells"
+
+cell.info <- readr::read_csv(file.path(b.path,"Thienpont_Tumors_52k_v4_R_fixed.cellInfo.txt"))
+bloom <- connect(file.path(b.path,"fibroblasts"), mode = "r")
+b.seurat <- as.Seurat(bloom)
+gene <- readr::read_rds("/home/pauling/projects/02_data/09_Gene/coding_gene.rds.gz")
+
+expr <- b.seurat@assays$RNA@counts
+expr <- t(expr)
+expr <- as.matrix(expr)
+
+overlap.gene <- intersect(gene$gene_name, colnames(expr))
+expr <- expr[,overlap.gene]
+```
+
+```{r}
+a <- cell.info %>% dplyr::filter(stringr::str_detect(ClusterName,"fibroblasts"))
+#a <- a %>% dplyr::mutate(CellID = stringr::str_replace(CellID, "_", "."))
+a <- a %>% dplyr::filter(CellID %in% rownames(expr))
+```
+
+```{r}
+clusters <- unique(a$ClusterID)
+
+patient.rogue <- function(info, cluster){
+    tmp <- info %>% dplyr::filter(ClusterID == cluster)
+    patients <- unique(info$PatientNumber)
+    rogue <- c()
+    for (i in 1:length(patients)) {
+        print(i)
+        index1 <- tmp %>% dplyr::filter(PatientNumber == patients[i]) %>% dplyr::pull(CellID)
+        if(length(index1) >= 20){
+            tmp.matr <- expr[index1,]
+            tmp.matr <- matr_filter(tmp.matr, min.cells = 10)
+            tmp.res <- SE_fun(tmp.matr, span = 0.5)
+            tmp.res <- matr_toli(tmp.res, tmp.matr, span = 0.5, n = 10)
+            rogue[i] <- cal_rogue(tmp.res)
+        }
+        else{
+            rogue[i] <- NA
+        }
+    }
+    return(rogue)
+}
+
+res <- list()
+
+for (i in 1:length(clusters)) {
+  res[[i]] <- patient.rogue(a, clusters[i])
+}
+
+res.tibble <- Reduce(rbind, res) %>% as.matrix() %>% t() %>% as.tibble()
+colnames(res.tibble) <- clusters
+#c("#FF3E96", "#EE3A8C", "#D02090")
+res.tibble %>%
+  tidyr::gather(key = clusters, value = ROGUE) %>%
+  ggplot(aes(clusters, ROGUE)) +
+  geom_boxplot(color = "#FF3E96", outlier.shape = NA) +
+  geom_point(color = "#FF3E96", size = 1.5) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, colour = "black"),
+        axis.title = element_text(size = 13, colour = "black")) +
+  labs(
+    x = "Clusters",
+    y = "ROGUE"
+  ) +
+  ylim(0.6,0.97)
+```
+
+```{r}
+a %>%
+  dplyr::filter(ClusterID == 10) %>%
+  dplyr::filter(PatientNumber == "1") %>%
+  dplyr::pull(CellID) -> index1
+
+sub.expr <- expr[index1,]
+sub.expr <- matr_filter(sub.expr, min.cells = 10)
+ent.res <- SE_fun(sub.expr, span = 0.3, r = 1)
+ent.res <- matr_toli(ent.res, sub.expr, span = 0.3, n = 10, r = 1)
+
+SEplot(ent.res, p.adj = T)
+```
+
+```{r}
+a %>%
+  dplyr::mutate(Embedding = stringr::str_remove(Embedding, "\\(")) %>%
+  dplyr::mutate(Embedding = stringr::str_remove(Embedding, "\\)")) %>%
+  #dplyr::select(Embedding) %>%
+  tidyr::separate(Embedding, c("UMAP_1", "UMAP_2"), sep = "\\,") %>%
+  dplyr::mutate(UMAP_1 = as.numeric(UMAP_1), UMAP_2 = as.numeric(UMAP_2)) %>%
+  dplyr::filter(UMAP_1 < -20) %>%
+  ggplot(aes(UMAP_1, UMAP_2)) +
+  geom_point(aes(colour = factor(ClusterID))) +
+  theme_minimal()
+```
+
+```{r}
+
+```
+

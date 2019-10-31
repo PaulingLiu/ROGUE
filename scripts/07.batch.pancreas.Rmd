@@ -1,0 +1,61 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+pancreas.data <- readRDS(file = "/home/pauling/projects/04_SEmodel/05_data_phase2/03.Batch/01.seuratv3.panc/pancreas_v3_files/pancreas_expression_matrix.rds")
+metadata <- readRDS(file = "/home/pauling/projects/04_SEmodel/05_data_phase2/03.Batch/01.seuratv3.panc/pancreas_v3_files/pancreas_metadata.rds")
+```
+
+```{r}
+pancreas <- CreateSeuratObject(pancreas.data, meta.data = metadata)
+pancreas.list <- SplitObject(pancreas, split.by = "tech")
+```
+
+```{r}
+for (i in 1:length(pancreas.list)) {
+    pancreas.list[[i]] <- NormalizeData(pancreas.list[[i]], verbose = FALSE)
+    pancreas.list[[i]] <- FindVariableFeatures(pancreas.list[[i]], selection.method = "vst", 
+        nfeatures = 10000, verbose = FALSE)
+}
+```
+
+```{r, fig.width=5.5, fig.height=4}
+pancreas.anchors <- FindIntegrationAnchors(object.list = pancreas.list, dims = 1:30)
+pancreas.integrated <- IntegrateData(anchorset = pancreas.anchors, dims = 1:30, features.to.integrate = rownames(pancreas.data))
+DefaultAssay(pancreas.integrated) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+pancreas.integrated.scaled <- ScaleData(pancreas.integrated, verbose = FALSE)
+pancreas.integrated.scaled <- RunPCA(pancreas.integrated.scaled, npcs = 30, verbose = FALSE)
+pancreas.integrated.scaled <- RunUMAP(pancreas.integrated.scaled, reduction = "pca", dims = 1:30)
+DimPlot(pancreas.integrated.scaled, reduction = "umap", group.by = "tech", pt.size = 0.1) + theme_void()
+```
+
+```{r}
+DimPlot(pancreas.integrated.scaled, reduction = "umap", group.by = "celltype", label = TRUE, repel = TRUE) + NoLegend()
+```
+
+```{r}
+matr <- pancreas.integrated@assays$integrated@data
+matr <- matr - min(matr)
+matr <- t(matr)
+matr <- as.matrix(matr)
+matr <- exp(matr) - 1
+ent.res <- SE_fun(matr, span = 0.5)
+
+metadata %>% 
+  tibble::rownames_to_column(var = "cellid") %>%
+  #dplyr::filter(tech == "celseq2") %>%
+  dplyr::filter(celltype == "gamma") %>%
+  dplyr::pull(cellid) -> index1
+
+matr.sub <- pancreas.data[,index1]
+matr.sub <- as.matrix(t(matr.sub))
+matr.sub <- matr_filter(matr.sub, min.cells = 15)
+ent.res <- SE_fun(matr.sub, span = 0.3)
+ent.res <- matr_toli(ent.res, matr.sub, n = 20, span = 0.3)
+```
+
