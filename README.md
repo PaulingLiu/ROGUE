@@ -5,6 +5,7 @@
 - [Overview](#overview)
 - [Installation Guide](#installation-guide)
 - [Tutorial](#tutorial)
+- [Reproduction instructions](#Reproduction instructions)
 - [License](./LICENSE)
 - [Citation](#citation)
 - [Contact](#Contact)
@@ -28,6 +29,9 @@ devtools::install_github("PaulingLiu/ROGUE")
 ## Tutorial
 For more details and basic usage see following tutorials:
 1.	[Guided Tutorial](https://htmlpreview.github.io/?https://github.com/PaulingLiu/ROGUE/blob/master/vignettes/ROGUE_Tutorials.html) (It takes a few seconds to load the HTML file)
+
+## Reproduction instructions
+The scripts for producing all the quantitative results in our manuscript can be found in [scripts](./scripts)
 
 ## Citation
 If you use ROGUE in your research, please considering citing:
