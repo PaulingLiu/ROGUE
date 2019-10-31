@@ -31,7 +31,7 @@ For more details and basic usage see following tutorials:
 1.	[Guided Tutorial](https://htmlpreview.github.io/?https://github.com/PaulingLiu/ROGUE/blob/master/vignettes/ROGUE_Tutorials.html) (It takes a few seconds to load the HTML file)
 
 ## Reproduction instructions
-The scripts for producing all the quantitative results in our manuscript can be found in [scripts](./scripts)
+The scripts for producing all the quantitative results in our manuscript can be found in [scripts](./scripts).
 
 ## Citation
 If you use ROGUE in your research, please considering citing:
