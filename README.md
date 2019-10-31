@@ -27,7 +27,7 @@ devtools::install_github("PaulingLiu/ROGUE")
 
 ## Tutorial
 For more details and basic usage see following tutorials:
-1.	[Guided Tutorial](https://htmlpreview.github.io/?https://github.com/PaulingLiu/ROGUE/blob/master/vignettes/ROGUE_Tutorials.html)
+1.	[Guided Tutorial](https://htmlpreview.github.io/?https://github.com/PaulingLiu/ROGUE/blob/master/vignettes/ROGUE_Tutorials.html) (It takes a few seconds to load the HTML file)
 
 ## Citation
 If you use ROGUE in your research, please considering citing:
