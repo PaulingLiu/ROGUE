@@ -12,12 +12,12 @@
 Often, it is not even clear whether a given cluster is uniform in unsupervised scRNA-seq data analyses. Here, we proposed the concept of cluster purity and introduced a conceptually novel statistic, named ROGUE, to examine whether a given cluster is a pure cell population. (bioRxiv preprint link [here](https://www.biorxiv.org/content/10.1101/819581v1)).
 
 ## Installation Guide
-**Installing dependency package**
+**Installing dependency package**  
 Before installing ROGUE, the “tidyverse” package should be installed first:
 ```
 install.packages("tidyverse")
 ```
-**Installing ROGUE**
+**Installing ROGUE**  
 To install ROGUE, run:
 ```
 if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
