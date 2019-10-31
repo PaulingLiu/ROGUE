@@ -1604,7 +1604,7 @@ $(document).ready(function () {
 <h3>Installing ROGUE</h3>
 <p><font face="Arial" size="4">To install ROGUE, run: </font></p>
 <pre><code>if (!requireNamespace(&quot;devtools&quot;, quietly = TRUE)) install.packages(&quot;devtools&quot;)
-devtools::install_github(&quot;PaulingLiu/ROGUE&quot;, build_opts = NULL)</code></pre>
+devtools::install_github(&quot;PaulingLiu/ROGUE&quot;)</code></pre>
 <hr />
 </div>
 </div>
@@ -1671,7 +1671,7 @@ head(ent.res)</code></pre>
 </div>
 <div id="rogue-calculation" class="section level3">
 <h3>ROGUE calculation</h3>
-<p><font face="Arial" size="4">To access the purity of this DC population, we can calculate the ROGUE value using the <code>CalculateRogue</code> function. This population received a ROGUE value of 0.72, thus confirming their heterogeneity. </font></p>
+<p><font face="Arial" size="4">To assess the purity of this DC population, we can calculate the ROGUE value using the <code>CalculateRogue</code> function. This population received a ROGUE value of 0.72, thus confirming their heterogeneity. </font></p>
 <pre class="r"><code>rogue.value &lt;- CalculateRogue(ent.res, platform = &quot;UMI&quot;)
 rogue.value</code></pre>
 <pre><code>## [1] 0.7219202</code></pre>
