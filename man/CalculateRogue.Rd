@@ -22,7 +22,7 @@ CalculateRogue(.x, platform = NULL, cutoff = 0.05, k = NULL,
 A value of ROGUE.
 }
 \description{
-Using ROGUE to access the purity of single cell population.
+Using ROGUE to assess the purity of single cell population.
 }
 \details{
 By taking advantage of the wide applicability of S-E model to scRNA-seq data, we introduce the statistic ROGUE to measure the purity of a cell population as:

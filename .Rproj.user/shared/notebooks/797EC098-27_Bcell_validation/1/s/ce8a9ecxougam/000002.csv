@@ -1,0 +1,88 @@
+"0","```r
+```r
+tmp.ent <- SE_fun(tmp_matr)
+tmp.ent <- matr_toli(tmp.ent, tmp_matr, n = 4)
+resolution <- c(0.5,0.8,1)
+biogene <- bio.gene(com.expr, batch = bb.res$Donor)
+
+tibble(
+  resolution = resolution
+) %>%
+  dplyr::mutate(
+    cells = purrr::map(
+      .x = resolution,
+      .f = function(.x){
+        sc$tl$leiden(adata.com, resolution = .x)
+        return(py_to_r(np$asarray(adata.com$obs$leiden)))
+      }
+    )
+  ) %>%
+  dplyr::mutate(
+    rogue = purrr::map(
+      .x = cells,
+      .f = function(.x){
+        tmp_cluster <- .x
+        table(cluster = .x) %>%
+          as.tibble() %>%
+          dplyr::mutate(
+            rogue = purrr::map_dbl(
+              .x = cluster,
+              .f = function(.x){
+                ent_tmp <- NA
+                tmp_matr <- com.expr[tmp_cluster == .x,]
+                cell_num <- ceiling(nrow(tmp_matr*0.05))
+                if(cell_num > 5){
+                  cell_num = 5
+                }
+                tmp_matr <- matr_filter(tmp_matr, min.cells = cell_num)
+                ent_tmp <- SE_fun(tmp_matr, span = 0.2)
+                ent_tmp <- matr_toli(ent_tmp, tmp_matr, n = cell_num, span = 0.2)
+                if(is.na(ent_tmp)){
+                  ent_tmp <- SE_fun(tmp_matr, span = 0.5)
+                  ent_tmp <- matr_toli(ent_tmp, tmp_matr, n = cell_num, span = 0.5)
+                }
+                ent_tmp <- ent_tmp %>% filter(Gene %in% overlap_gene)
+                cal_rogue(ent_tmp)
+              }
+            )
+          )
+      }
+    )
+  ) -> res
+
+a <- res
+a %>%
+  dplyr::mutate(
+    rogue = purrr::map(
+      .x = rogue,
+      .f = function(.x)
+      .x %>%
+        dplyr::mutate(rogue = ifelse(rogue > 0.91,0.91, rogue))
+    )
+  ) -> a
+
+a <- get_rogue_inc(a[-3,])
+a <- a[-3,]
+ggplot(aes(1:nrow(a), a$average.rogue), data = NULL) +
+  geom_line(colour = '#FF3E96') +
+  geom_point(colour = '#FF3E96', size = 2) +
+  scale_x_continuous(
+    breaks = c(1:nrow(a)),
+    label = paste(1:nrow(a), \_clusters\, sep = \\)
+) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_text(size = 15,color=\black\),
+    axis.text = element_text(size = 12,color=\black\),
+    legend.title = element_text(size = 0),
+    legend.text = element_text(size = 0),
+    axis.text.y = element_text(color=\black\),
+    axis.text.x = element_text(color=\black\, angle = 40, hjust = 1)
+  ) +
+  labs(
+    x = \ \,
+    y = \ROGUE\
+  )
+```
+```"

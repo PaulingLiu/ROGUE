@@ -1,0 +1,5 @@
+"0","```r
+for (i in 1:1) {
+    print(t.test(unlist(sda2[2,]), unlist(sda2[i,]), alternative = \"greater\"))
+}
+```"

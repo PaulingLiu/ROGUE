@@ -1,0 +1,50 @@
+"0","```r
+get_hd <- function(.x, .y, cell_type){
+  colnames(.y) <- colnames(.x)
+  
+  .x <- .x %>%
+    dplyr::mutate(
+      mean.rogue = purrr::map_dbl(
+        .x = rogue,
+        .f = function(.x){
+          mean(.x$rogue)
+        }
+      )
+    )
+  
+  .y <- .y %>%
+    dplyr::mutate(
+      mean.rogue = purrr::map_dbl(
+        .x = rogue,
+        .f = function(.x){
+          mean(.x$rogue)
+        }
+      )
+    )
+  
+  .x <- .x %>%
+    dplyr::mutate(hd1 = 100*(.x$mean.rogue[1]-mean.rogue)/.x$mean.rogue[1]) %>%
+    dplyr::mutate(hd2 = 100*(.x$mean.rogue[9]-mean.rogue)/.x$mean.rogue[9]) %>%
+    dplyr::mutate(method = \"rogue\")
+  
+  .y <- .y %>%
+    dplyr::mutate(hd1 = 100*(.y$mean.rogue[1]-mean.rogue)/2) %>%
+    dplyr::mutate(hd2 = 100*(.y$mean.rogue[9]-mean.rogue)/2) %>%
+    dplyr::mutate(method = \"Silhouette\")
+  
+  .x$prop[6:9] <- .x$prop[4:1]
+  .y$prop[6:9] <- .y$prop[4:1]
+  
+  tmp1 <- .x[2:5,] %>% 
+    dplyr::bind_rows(.y[2:5,]) %>% 
+    dplyr::mutate(label = paste(cell_type[1],\"-\",cell_type[2], sep = \"\")) %>% 
+    dplyr::select(-hd2)
+  
+  tmp2 <- .x[5:8,] %>% 
+    dplyr::bind_rows(.y[5:8,]) %>% 
+    dplyr::mutate(label = paste(cell_type[2],\"-\",cell_type[1], sep = \"\")) %>%
+    dplyr::rename(hd1 = hd2)
+  
+  tmp1 %>% dplyr::bind_rows(tmp2)
+}
+```"

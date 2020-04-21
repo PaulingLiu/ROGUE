@@ -1,0 +1,12 @@
+"0","```r
+pro_10x <- function(.x){
+  matr <- Read10X(.x)
+  gene <- readr::read_rds(\"/home/pauling/projects/02_data/09_Gene/coding_gene.rds.gz\")
+  over_gene <- intersect(gene$gene_name, rownames(matr))
+  matr <- matr[over_gene,]
+  matr <- as.matrix(matr)
+  matr <- t(matr)
+  matr <- pro_da(matr)
+  return(matr)
+}
+```"

@@ -1,0 +1,39 @@
+"0","```r
+a <- meta %>% dplyr::filter(leiden.res.1.bbknn == 4) %>% dplyr::filter(project == \"liver\")
+a <- table(a$Donor, a$tissue) %>% as.data.frame()
+a %>%
+  as.data.frame() %>%
+  tidyr::spread(key = \"Var2\", value = \"Freq\") %>%
+  as.data.frame() %>%
+  tibble::column_to_rownames(var = \"Var1\") -> sda
+
+sda2 <- t(sda) %>% as.data.frame() %>% dplyr::mutate_all(funs((./sum(.))))
+rownames(sda2) <- colnames(sda)
+sda2 %>%
+  tibble::rownames_to_column(var = \"Tissue\") %>%
+  tidyr::gather(key = \"Donor\", value = \"fraction\", -Tissue) -> a
+
+
+tibble(Tissue = rownames(sda2)) %>%
+  dplyr::mutate(mean = purrr::map_dbl(.x = Tissue, function(.x){mean(unlist(sda2[.x,]))})) %>%
+  dplyr::mutate(sem = purrr::map_dbl(.x = Tissue, function(.x){sd(unlist(sda2[.x,]))/sqrt(5)})) %>%
+  dplyr::mutate(ymax = mean+sem) %>%
+  dplyr::mutate(ymin = mean-sem) %>%
+  ggplot(aes(factor(Tissue, levels = c(\"Tumor\",\"Lymphnode\",\"Blood\", \"Normal\",  \"Ascites\")), mean)) +
+  geom_col(aes(fill = Tissue), colour = \"black\") +
+  scale_fill_manual(values = c(\"#009ACD\", \"#EE3A8C\", \"#EE82EE\", \"#20B2AA\", \"#FF7F50\")) +
+  geom_errorbar(aes(ymin = ymin, ymax = ymax), width = 0.2) +
+  theme_minimal() +
+  theme(legend.position = \"none\") +
+  #geom_point(aes(Tissue, fraction, colour = Donor), a) +
+  theme(axis.title = element_text(size = 12)) +
+  theme(axis.text = element_text(size = 12)) +
+  theme(legend.title = element_text(size = 10)) +
+  theme(axis.text.y = element_text(color=\"black\"),
+        axis.text.x = element_text(color=\"black\")) +
+  labs(
+    x = \"\",
+    y = \"Fraction\"
+  ) +
+  ylim(0,0.9) #-> p
+```"

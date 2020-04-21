@@ -1,0 +1,348 @@
+GSE <- '10X_immune.rds.gz'
+
+
+library(SingleCellExperiment)
+library(reticulate)
+library(tidyverse)
+library(Seurat)
+library(scmap)
+library(fmsb)
+
+path_1 <- '/home/pauling/projects/01_classifier/01_data/10_CrossValidation/expr/'
+path_2 <- '/home/pauling/projects/01_classifier/01_data/10_CrossValidation/res/'
+
+expr <- readr::read_rds(paste(path_1, GSE, sep = ''))
+null_expr <- readr::read_rds('/home/pauling/projects/01_classifier/01_data/10_CrossValidation/null_expr.rds.gz')
+
+DsGene_fun <- function(expr){          
+  type_expr <- expr %>%
+    tibble::as_tibble() %>%
+    tidyr::nest(-label) %>%
+    dplyr::rename(expr = data) %>%
+    dplyr::mutate(colmeans = purrr::map(
+      .x = expr,
+      .f = function(.x){colMeans(.x)}))
+  
+  type_expr$colmeans %>%
+    as.data.frame() %>%
+    tibble::remove_rownames() %>%
+    t() %>%
+    as.data.frame() %>%
+    tibble::remove_rownames() -> type_mean_expr
+  
+  rownames(type_mean_expr) <- type_expr$label
+  colnames(type_mean_expr) <- colnames(expr)[-ncol(expr)]
+  
+  type_mean_expr %>%
+    t() %>%
+    tibble::as_tibble() %>%
+    dplyr::mutate(ExprMean = rowMeans(.)) %>%
+    as.data.frame() -> type_ds
+  
+  rownames(type_ds) <- colnames(type_mean_expr)
+  
+  type_ds <- 0.18*log(0.03*type_ds + 1)
+  sum_ds <- rowSums(type_ds[,-ncol(type_ds)])
+  
+  type_ds <- type_ds %>%
+    tibble::rownames_to_column(var = 'gene') %>%
+    dplyr::mutate(ds = (ncol(.) - 2) * ExprMean - sum_ds) %>%
+    dplyr::arrange(desc(ds))
+  
+  type_ds_sub <- type_ds %>%
+    dplyr::select(-gene, -ds, -ExprMean)
+  
+  type_label <- colnames(type_ds_sub)
+  
+  get_label <- function(.x){
+    type_label[which(type_ds_sub[.x,] == max(type_ds_sub[.x,]))[1]]
+  }
+  
+  gene_label <- tibble(
+    gene_num = 1:nrow(type_ds),
+    gene = type_ds$gene) %>% 
+    dplyr::mutate(label = purrr::map_chr(gene_num, get_label))
+  
+  gene_label %>%
+    dplyr::select(-gene_num) %>%
+    tidyr::nest(-label) %>%
+    dplyr::mutate(
+      data = purrr::map(
+        .x = data,
+        .f = function(.x){
+          .x %>%
+            dplyr::mutate(flag = 1:nrow(.))
+        }
+      )
+    ) -> gene_label
+  
+  gene_label <- Reduce(rbind, gene_label$data)
+  
+  type_ds %>% 
+    dplyr::inner_join(gene_label, by = 'gene') %>%
+    dplyr::arrange(flag, desc(ds)) %>%
+    dplyr::slice(1:500) %>%
+    dplyr::pull(gene)
+}
+scmap_ck <- function(expr_train, expr_test){ 
+  
+  train_label <- expr_train$label
+  test_label <- expr_test$label
+  
+  expr_train <- expr_train %>% dplyr::select(-label) %>% t()
+  expr_test <- expr_test %>% dplyr::select(-label) %>% t()
+  
+  expr_train <- 2^expr_train - 1
+  expr_test <- 2^expr_test - 1
+  
+  ann <- data.frame(cell_type1 = train_label)
+  sce <- SingleCellExperiment(assays = list(normcounts = as.matrix(expr_train)), colData = ann)
+  logcounts(sce) <- log2(normcounts(sce) + 1)
+  rowData(sce)$feature_symbol <- rownames(sce)
+  sce <- sce[!duplicated(rownames(sce)), ]
+  
+  tx_sce <- SingleCellExperiment(assays = list(normcounts = as.matrix(expr_test)))
+  logcounts(tx_sce) <- log2(normcounts(tx_sce) + 1)
+  rowData(tx_sce)$feature_symbol <- rownames(tx_sce)
+  
+  sce <- selectFeatures(sce, n_features = 500,  suppress_plot = T)
+  sce <- indexCluster(sce)
+  scmapCluster_results <- scmapCluster(
+    projection = tx_sce, 
+    threshold = 0,
+    index_list = list(
+      yan = metadata(sce)$scmap_cluster_index
+    )
+  )
+  
+  tibble(
+    ori = as.character(test_label),
+    prd = unlist(scmapCluster_results$combined_labs),
+    prob = scmapCluster_results$scmap_cluster_siml[,1])
+  
+}
+svm_ck <- function(expr_train, expr_test, gene){ 
+  use_python('/home/pauling/anaconda3/bin/python')
+  MNB <- import('sklearn.naive_bayes')
+  MNB <- MNB$MultinomialNB
+  rf <- import('sklearn.ensemble')
+  svm <- import('sklearn.svm')
+  RF <- rf$RandomForestClassifier
+  SVM <- svm$LinearSVC
+  
+  X_label <- expr_train$label
+  Y_label <- expr_test$label
+  clf <- SVM(max_iter = as.integer(9000))
+  
+  X_train <- as.matrix(expr_train[,gene[-length(gene)]])
+  X_test <- as.matrix(expr_test[,gene[-length(gene)]])
+  
+  clf$fit(X_train, X_label)
+  prd <- clf$predict(X_test)
+  prob <- clf$decision_function(X_test)
+  prob <- rowMax(prob)
+  
+  tibble(
+    ori = as.character(Y_label),
+    prd = prd,
+    prob = prob)
+}
+RF_ck <- function(expr_train, expr_test, gene){
+  use_python('/home/pauling/anaconda3/bin/python')
+  MNB <- import('sklearn.naive_bayes')
+  MNB <- MNB$MultinomialNB
+  rf <- import('sklearn.ensemble')
+  svm <- import('sklearn.svm')
+  RF <- rf$RandomForestClassifier
+  SVM <- svm$LinearSVC
+  
+  X_label <- expr_train$label 
+  Y_label <- expr_test$label
+  clf <- RF(n_estimators = as.integer(100))
+  
+  X_train <- as.matrix(expr_train[,gene[-length(gene)]])
+  X_test <- as.matrix(expr_test[,gene[-length(gene)]])
+  
+  clf$fit(X_train, X_label)
+  prd <- clf$predict(X_test)
+  prob <- clf$predict_proba(X_test)
+  prob <- rowMax(prob)
+  
+  tibble(
+    ori = as.character(Y_label),
+    prd = prd,
+    prob = prob)
+  
+}
+SciBet <- function(expr_train, expr_test, gene){  
+  use_python('/home/pauling/anaconda3/bin/python')
+  MNB <- import('sklearn.naive_bayes')
+  MNB <- MNB$MultinomialNB
+  rf <- import('sklearn.ensemble')
+  svm <- import('sklearn.svm')
+  RF <- rf$RandomForestClassifier
+  SVM <- svm$LinearSVC
+  X_label <- expr_train$label
+  Y_label <- expr_test$label
+  clf <- MNB()
+  
+  type_expr <- expr_train %>%
+    tibble::as_tibble() %>%
+    tidyr::nest(-label) %>%
+    dplyr::rename(expr = data) %>%
+    dplyr::mutate(colmeans = purrr::map(
+      .x = expr,
+      .f = function(.x){colMeans(.x)}))
+  
+  type_expr$colmeans %>%
+    as.data.frame() %>%
+    tibble::remove_rownames() %>%
+    t() %>%
+    as.data.frame() %>%
+    tibble::remove_rownames() -> type_mean_expr
+  
+  rownames(type_mean_expr) <- type_expr$label
+  colnames(type_mean_expr) <- colnames(expr_train)[-ncol(expr_train)]
+  
+  all_mean <- colMeans(type_mean_expr)
+  overlap_gene2 <- intersect(names(null_expr), names(all_mean)) %>%
+    intersect(colnames(expr_test))
+  
+  
+  tibble(expr1 = as.numeric(all_mean[overlap_gene2]),
+         expr2 = null_expr[overlap_gene2],
+         gene = overlap_gene2) %>%
+    dplyr::mutate(ent1 = 0.18*log(0.03*expr1 + 1)) %>%
+    dplyr::mutate(ent2 = 0.18*log(0.03*expr2 + 1)) %>%
+    dplyr::mutate(ds = ent1 - ent2) %>%
+    dplyr::mutate_at(c('expr1', 'expr2'), funs(./sum(.))) %>%
+    dplyr::mutate_at(c('expr1', 'expr2'), log) %>%
+    dplyr::arrange(desc(ds)) -> cell_index
+  
+  matr1 <- as.matrix(t(expr_test[,cell_index$gene[1:500]]))
+  matr2 <- as.matrix(t(cell_index[1:500,1:2]))
+  Neg_res <- matr2 %*% matr1 %>%
+    t() %>%
+    tibble::as.tibble() %>%
+    dplyr::mutate(prob = expr1 - expr2)
+  
+  X_train <- as.matrix(expr_train[,gene[-length(gene)]])
+  X_test <- as.matrix(expr_test[,gene[-length(gene)]])
+  
+  clf$fit(X_train, X_label)
+  prd <- clf$predict(X_test)
+  prob1 <- clf$predict_proba(X_test)
+  prob1 <- rowMax(prob1)
+  
+  tibble(
+    ori = as.character(Y_label),
+    prd = prd,
+    prob = Neg_res$prob,
+    prob1 = prob1)
+}
+Seurat3 <- function(expr_train, expr_test){
+  
+  data.frame(
+    celltype = expr_train$label,
+    tech = 'xx'
+  ) -> metadata
+  
+  data.frame(
+    celltype = expr_test$label,
+    tech = 'yy'
+  ) -> metadata1
+  
+  ori <- expr_test$label
+  X_train <- as.matrix(t(expr_train[,-ncol(expr_train)]))
+  X_test <- as.matrix(t(expr_test[,-ncol(expr_test)]))
+  
+  matr <- cbind(X_train, X_test)
+  metadata <- rbind(metadata, metadata1)
+  colnames(matr) <- as.character(1:ncol(matr))
+  rownames(metadata) <- as.character(1:nrow(metadata))
+  
+  ttest <- CreateSeuratObject(counts = matr, meta.data = metadata)
+  ttest.list <- SplitObject(object = ttest, split.by = "tech")
+  
+  for (i in 1:length(x = ttest.list)) {
+    ttest.list[[i]] <- NormalizeData(object = ttest.list[[i]], verbose = FALSE)
+    ttest.list[[i]] <- FindVariableFeatures(object = ttest.list[[i]], 
+                                            selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+  }
+  
+  anchors <- FindTransferAnchors(reference = ttest.list[[1]], 
+                                 query = ttest.list[[2]], 
+                                 dims = 1:30)
+  
+  predictions <- TransferData(anchorset = anchors,
+                              refdata = ttest.list[[1]]$celltype,
+                              dims = 1:30)
+  
+  tibble(
+    ori = ori,
+    prd = predictions$predicted.id,
+    prob = predictions$prediction.score.max
+  )
+}
+pipe_fun <- function(.x, .y, ID){
+  
+  over_gene <- intersect(colnames(.x), colnames(.y))
+  matr1 <- .x[,over_gene]
+  matr2 <- .y[,over_gene]
+  matr2$label <- 'Neg'
+  
+  print(ID[1:10])
+  
+  train <- matr1[ID,]
+  test <- matr1[-ID,] %>% dplyr::bind_rows(matr2)
+  
+  DsGene <- DsGene_fun(train)
+  
+  train[,-ncol(train)] <- log2(train[,-ncol(train)] + 1)
+  test[,-ncol(test)] <- log2(test[,-ncol(test)] + 1)
+  
+  ck1 <- scmap_ck(train, test)
+  ck2 <- svm_ck(train, test, DsGene)
+  ck3 <- RF_ck(train, test, DsGene)
+  ck4 <- SciBet(train, test, DsGene)
+  ck5 <- Seurat3(train, test)
+  
+  ck1 %>%
+    dplyr::bind_rows(ck2) %>%
+    dplyr::bind_rows(ck3) %>%
+    dplyr::bind_rows(ck4) %>%
+    dplyr::bind_rows(ck5) -> res
+  
+  return(res)
+}
+
+
+expr_1 <- expr %>%
+  dplyr::filter(type == 'expr_1') %>%
+  dplyr::select(-type)
+
+expr_2 <- expr %>%
+  dplyr::filter(type == 'expr_2') %>%
+  dplyr::select(-type)
+
+tmp <- tibble(data1 = list(expr_1),
+              data2 = list(expr_2))
+
+res <- list()
+ran <- list()
+
+for(i in 1:50){
+  tibble(num = 1:nrow(expr_1),
+         label = expr_1$label) %>%
+    dplyr::group_by(label) %>%
+    dplyr::sample_frac(0.7) %>%
+    dplyr::ungroup() %>%
+    dplyr::pull(num) -> ran[[i]]
+}
+
+for (i in 1:50) {
+  print(ran[[i]][1:10])
+  res[[i]] <- pipe_fun(expr_1, expr_2, ran[[i]])
+}
+
+res %>% readr::write_rds(paste(path_2, GSE, sep = ''), compress = 'gz')

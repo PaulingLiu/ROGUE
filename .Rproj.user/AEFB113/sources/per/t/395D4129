@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1571728254736.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "16|29|85|0|\n86|44|122|0|\n",
+    "hash" : "600931935",
+    "id" : "395D4129",
+    "lastKnownWriteTime" : 1544703541,
+    "last_content_update" : 1571729908727,
+    "path" : "~/projects/01_classifier/02_scripts/04_rep_cross_validation/10X_immune.rds.gz.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "137,20",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,24 @@
+"0","```r
+get_mean <- function(matr, info){
+  info <- info %>% dplyr::mutate(ID = 1:nrow(.))
+  n_row <- length(unique(info$Cluster))
+  mean_expr <- matrix(data = NA, nrow = ncol(matr), ncol = n_row)
+  n <- 0
+  for (i in unique(info$Cluster)) {
+    n <- n + 1
+    ID <- info %>% dplyr::filter(Cluster == i) %>% dplyr::pull(ID)
+    mean_expr[,n] <- colMeans(matr[ID,])
+  }
+  rownames(mean_expr) <- colnames(matr)
+  colnames(mean_expr) <- paste(\"Cluster_\",unique(info$Cluster), sep = \"\")
+  
+  row_sum <- as.numeric(rowMeans(mean_expr))
+  row_sum <- log(row_sum+1)
+  tmp_expr <- log(mean_expr+1)
+  var1 <- rowMeans(tmp_expr)
+  
+  mean_expr <- as.data.frame(mean_expr) %>% dplyr::mutate(ds = row_sum-var1)
+  rownames(mean_expr) <- colnames(matr)
+  return(mean_expr)
+}
+```"

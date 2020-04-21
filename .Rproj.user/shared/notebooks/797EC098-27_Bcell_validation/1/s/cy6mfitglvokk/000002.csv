@@ -1,0 +1,11 @@
+"0","```r
+meta %>%
+  #dplyr::filter(!(tissue %in% c(\"0\",\"1\"))) %>%
+  #dplyr::filter(leiden.res.1.bbknn != \"4\") %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = tissue), size = 2) +
+  theme_bw() +
+  theme_void() +
+  theme(legend.position = \"top\") +
+  scale_colour_manual(values =  c(\"#00EEEE\", \"#00B2EE\", \"#FF69B4\", \"#FF3E96\", \"#48D1CC\", \"#FF8247\", \"#90EE90\"))
+```"

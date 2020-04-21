@@ -1,0 +1,10 @@
+"0","```r
+```r
+total_umi <- colSums(as.matrix(expr))
+gene_count <- colSums(as.matrix(expr) > 0, na.rm = T)
+
+filt_index <- c(total_umi < 25000 & total_umi > 600 & gene_count > 600)
+expr <- expr[,filt_index]
+cell.info <- cell.info[filt_index,]
+```
+```"

@@ -13,7 +13,7 @@ ent.toli(ent, expr, n = 2, span = 0.5, r = 1, mt.method = c("fdr","BH"))
 
 \item{n}{Remove this many outlier cells.}
 
-\item{span}{The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.}
+\item{span}{The parameter α which controls the degree of smoothing.}
 
 \item{r}{A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.}
 

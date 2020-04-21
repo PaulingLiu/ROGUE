@@ -1,0 +1,12 @@
+"0","```r
+lung.sce <- CreateSeuratObject(counts = expr)
+lung.sce <- PercentageFeatureSet(lung.sce, pattern = \"^MT-\", col.name = \"percent.mt\")
+lung.sce <- SCTransform(lung.sce, vars.to.regress = \"percent.mt\", verbose = FALSE, )
+lung.sce <- RunPCA(lung.sce, verbose = FALSE)
+lung.sce <- RunUMAP(lung.sce, dims = 1:30, verbose = FALSE)
+lung.sce <- FindNeighbors(lung.sce, dims = 1:30, verbose = FALSE)
+lung.sce <- FindClusters(lung.sce, verbose = FALSE)
+DimPlot(lung.sce, label = T) + NoLegend()
+
+lung.sce %>% readr::write_rds(file.path(out.path,\"lung.Bcell.rds.gz\"), compress = \"gz\")
+```"

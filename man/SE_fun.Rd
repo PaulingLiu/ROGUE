@@ -4,16 +4,18 @@
 \alias{SE_fun}
 \title{Identify highly informative genes using S-E model}
 \usage{
-SE_fun(expr, span = 0.5, r = 1, mt.method = "fdr")
+SE_fun(expr, span = 0.5, r = 1, mt.method = "fdr", if.adj = T)
 }
 \arguments{
 \item{expr}{The expression matrix. Rows should be genes and columns should be cells.}
 
-\item{span}{The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.}
+\item{span}{The parameter α which controls the degree of smoothing.}
 
 \item{r}{A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.}
 
 \item{mt.method}{The multiple testing method used in p.adjust.}
+
+\item{if.adj}{Whether to apply multiple testing method to adjust p.value.}
 }
 \value{
 A tibble object with seven columns:

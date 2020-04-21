@@ -1,0 +1,22 @@
+"0","```r
+bio.gene <- function(matr, batch, gene_num = 1500){
+   comb.ent <- SE_fun(matr)
+   comb.gene <- comb.ent$Gene[comb.ent$p.value < 0.01]
+   uni.batch <- unique(batch)
+   gene.list <- list()
+   for (i in 1:length(uni.batch)) {
+     tmp.expr <- matr[batch == uni.batch[i],]
+     tmp.expr <- matr_filter(tmp.expr, min.cells = 10)
+     tmp.ent <- SE_fun(tmp.expr)
+     gene.list[[i]] <- tmp.ent$Gene[tmp.ent$p.value < 0.01]
+   }
+   
+   bio.gene <- gene.list[[1]]
+   for (i in 2:length(gene.list)) {
+     bio.gene <- unique(c(bio.gene, gene.list[[i]]))
+   }
+   
+   bio.gene <- intersect(comb.gene, bio.gene)
+   return(bio.gene)
+}
+```"

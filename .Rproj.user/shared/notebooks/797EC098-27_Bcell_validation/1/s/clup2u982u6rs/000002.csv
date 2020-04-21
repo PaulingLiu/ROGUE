@@ -1,0 +1,16 @@
+"0","```r
+use_python(\"/home/heyao/data/tools/basic/anaconda3/bin/python\")
+b.path <- \"/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells\"
+out.path <- \"/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells\"
+
+cell.info <- readr::read_csv(file.path(b.path,\"Thienpont_Tumors_52k_v4_R_fixed.cellInfo.txt\"))
+bloom <- connect(file.path(b.path,\"bcell.loom\"), mode = \"r\")
+b.seurat <- as.Seurat(bloom)
+
+cell.info <- cell.info %>% 
+  dplyr::filter(ClusterName == \"follicular B cells\") %>%
+  dplyr::filter(!(Sample %in% c(1,8,10,12,15,17,21)))
+
+expr <- b.seurat@assays$RNA@counts
+expr <- expr[,cell.info$CellID]
+```"

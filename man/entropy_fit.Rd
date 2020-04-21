@@ -9,7 +9,7 @@ entropy_fit(.x, span = 0.5, mt.method = c("fdr","BH"))
 \arguments{
 \item{.x}{A tibble object returned from the Entropy function.}
 
-\item{span}{The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.}
+\item{span}{The parameter α which controls the degree of smoothing.}
 
 \item{mt.method}{The multiple testing method used in p.adjust.}
 }

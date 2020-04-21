@@ -1,0 +1,92 @@
+"0","```r
+SEplot <- function(.x, point_size = 1, geom_line = T, p.adj = F, cutoff = 0.05){
+  if(isFALSE(p.adj)){
+    if(geom_line){
+      .x %>%
+        ggplot(aes(mean.expr, entropy)) +
+        geom_point(colour = '#1E90FF', size = point_size) +
+        geom_line(aes(mean.expr, fit), lwd = 0.7) +
+        theme_bw() +
+        theme(
+            axis.title = element_text(size = 15,color=\"black\"),
+            axis.text = element_text(size = 15,color=\"black\"),
+            legend.title = element_text(size = 0),
+            legend.text = element_text(size = 0),
+            axis.text.y = element_text(color=\"black\"),
+            axis.text.x = element_text(color=\"black\")
+        ) +
+        labs(
+            x = \"log(mean expression)\",
+            y = \"expression entropy\"
+        ) -> p
+    }
+    else{
+      .x %>%
+        ggplot(aes(mean.expr, entropy)) +
+        geom_point(colour = '#1E90FF', size = point_size) +
+        #geom_line(aes(mean.expr, fit), lwd = 0.7) +
+        theme_bw() +
+        theme(
+            axis.title = element_text(size = 15,color=\"black\"),
+            axis.text = element_text(size = 15,color=\"black\"),
+            legend.title = element_text(size = 0),
+            legend.text = element_text(size = 0),
+            axis.text.y = element_text(color=\"black\"),
+            axis.text.x = element_text(color=\"black\")
+        ) +
+        labs(
+            x = \"log(mean expression)\",
+            y = \"expression entropy\"
+        ) -> p
+      }
+    }
+  if(isTRUE(p.adj)){
+    .x <- .x %>% dplyr::mutate(sig = ifelse(p.adj <= cutoff, 1, 0))
+    
+    if(geom_line){
+      .x %>%
+        ggplot(aes(mean.expr, entropy)) +
+        geom_point(aes(colour = factor(sig)), size = point_size) +
+        geom_line(aes(mean.expr, fit), lwd = 0.7) +
+        scale_color_manual(values = c(\"#1E90FF\", \"red\")) +
+        theme_bw() +
+        theme(
+            legend.position = \"none\",
+            axis.title = element_text(size = 15,color=\"black\"),
+            axis.text = element_text(size = 15,color=\"black\"),
+            legend.title = element_text(size = 0),
+            legend.text = element_text(size = 0),
+            axis.text.y = element_text(color=\"black\"),
+            axis.text.x = element_text(color=\"black\")
+        ) +
+        labs(
+            x = \"log(mean expression)\",
+            y = \"expression entropy\"
+        ) -> p
+      }
+    
+    else{
+      .x %>%
+        ggplot(aes(mean.expr, entropy)) +
+        geom_point(aes(colour = factor(sig)), size = point_size) +
+        #geom_line(aes(mean.expr, fit), lwd = 0.7) +
+        scale_color_manual(values = c(\"#1E90FF\", \"red\")) +
+        theme_bw() +
+        theme(
+            legend.position = \"none\",
+            axis.title = element_text(size = 15,color=\"black\"),
+            axis.text = element_text(size = 15,color=\"black\"),
+            legend.title = element_text(size = 0),
+            legend.text = element_text(size = 0),
+            axis.text.y = element_text(color=\"black\"),
+            axis.text.x = element_text(color=\"black\")
+        ) +
+        labs(
+            x = \"log(mean expression)\",
+            y = \"expression entropy\"
+        ) -> p
+    }
+  }
+  return(p)
+}
+```"

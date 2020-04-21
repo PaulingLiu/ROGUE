@@ -10,7 +10,7 @@ rogue.boxplot(res.rogue)
 \item{res.rogue}{A dataframe returned from the 'rogue' function.}
 }
 \value{
-A ggplot object
+A ggplot object.
 }
 \description{
 Draws a boxplot of the ROGUE values for each cluster in different samples.

@@ -4,7 +4,7 @@
 \alias{rogue}
 \title{Calculate the ROGUE value of each putative cluster for each sample.}
 \usage{
-rogue(expr, labels, samples, min.cell.n = 10, remove.outlier.n, span = 0.5, r = 1, mt.method = c("fdr","BH"))
+rogue(expr, labels, samples, platform = NULL, k= NULL, min.cell.n = 10, remove.outlier.n = 2, span = 0.5, r = 1, mt.method = c("fdr","BH"))
 }
 \arguments{
 \item{expr}{The expression matrix. Rows should be genes and columns should be cells.}
@@ -13,13 +13,19 @@ rogue(expr, labels, samples, min.cell.n = 10, remove.outlier.n, span = 0.5, r = 
 
 \item{samples}{A vector of samples (e.g. patients) to which each cell belongs, corresponding to 'expr' argument.}
 
-\item{min.cell.n}{Include genes detected in at least this many cells.}
+\item{min.cell.n}{Only clusters containing at least this many cells will receive ROGUE values.}
 
 \item{remove.outlier.n}{Remove this many outlier cells when calculating ROGUE.}
 
-\item{span}{The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.}
+\item{span}{The parameter α which controls the degree of smoothing.}
 
 \item{r}{A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.}
+
+\item{filter}{Logical, whether to filter out low-abundance genes and low-quality cells.}
+
+\item{min.cells}{if parameter filter is "TRUE", include genes detected in at least this many cells.}
+
+\item{min.genes}{if parameter filter is "TRUE", Include cells where at least this many genes are detected.}
 
 \item{mt.method}{The multiple testing method used in p.adjust.}
 }

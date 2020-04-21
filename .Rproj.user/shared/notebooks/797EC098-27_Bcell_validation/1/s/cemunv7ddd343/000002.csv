@@ -1,0 +1,7 @@
+"0","```r
+```r
+inter.gene <- intersect(rownames(matr), rownames(expr))
+inter.gene <- intersect(inter.gene, overlap_gene)
+com.expr <- cbind(matr[inter.gene,], expr[inter.gene,])
+```
+```"

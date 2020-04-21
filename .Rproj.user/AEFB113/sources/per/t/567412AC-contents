@@ -1,0 +1,718 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#load data
+```{r}
+use_python("/home/heyao/data/tools/basic/anaconda3/bin/python")
+b.path <- "/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells"
+out.path <- "/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells"
+
+cell.info <- readr::read_csv(file.path(b.path,"Thienpont_Tumors_52k_v4_R_fixed.cellInfo.txt"))
+bloom <- connect(file.path(b.path,"bcell.loom"), mode = "r")
+b.seurat <- as.Seurat(bloom)
+
+cell.info <- cell.info %>% 
+  dplyr::filter(ClusterName == "follicular B cells") %>%
+  dplyr::filter(!(Sample %in% c(1,8,10,12,15,17,21)))
+
+expr <- b.seurat@assays$RNA@counts
+expr <- expr[,cell.info$CellID]
+```
+
+#QC
+```{r}
+total_umi <- colSums(as.matrix(expr))
+gene_count <- colSums(as.matrix(expr) > 0, na.rm = T)
+
+filt_index <- c(total_umi < 25000 & total_umi > 600 & gene_count > 600)
+expr <- expr[,filt_index]
+cell.info <- cell.info[filt_index,]
+cell.info %>% readr::write_rds(file.path(out.path,"meta.lung.Bcell.rds.gz"), compress = "gz")
+```
+
+#clustering
+```{r}
+lung.sce <- CreateSeuratObject(counts = expr)
+lung.sce <- PercentageFeatureSet(lung.sce, pattern = "^MT-", col.name = "percent.mt")
+lung.sce <- SCTransform(lung.sce, vars.to.regress = "percent.mt", verbose = FALSE, )
+lung.sce <- RunPCA(lung.sce, verbose = FALSE)
+lung.sce <- RunUMAP(lung.sce, dims = 1:30, verbose = FALSE)
+lung.sce <- FindNeighbors(lung.sce, dims = 1:30, verbose = FALSE)
+lung.sce <- FindClusters(lung.sce, verbose = FALSE)
+DimPlot(lung.sce, label = T) + NoLegend()
+
+lung.sce %>% readr::write_rds(file.path(out.path,"lung.Bcell.rds.gz"), compress = "gz")
+```
+
+```{r, fig.width=6, fig.height=4.5}
+pca <- lung.sce@reductions$pca@cell.embeddings
+anndata = import("anndata",convert=FALSE)
+sc = import("scanpy.api",convert=FALSE)
+np = import("numpy",convert=FALSE)
+bbknn = import("bbknn", convert=FALSE)
+adata.lung = anndata$AnnData(X=pca, obs=cell.info$Sample[filt_index])
+sc$tl$pca(adata.lung)
+  
+adata.lung$obsm$X_pca = pca
+bbknn$bbknn(adata.lung, batch_key=0)
+
+sc$tl$umap(adata.lung)
+sc$tl$leiden(adata.lung)
+umap.lung = py_to_r(adata.lung$obsm$X_umap)
+
+tibble::tibble(
+  leiden.res.1.bbknn = py_to_r(np$asarray(adata.lung$obs$leiden)), 
+  UMAP1 = umap.lung[,1], 
+  UMAP2 = umap.lung[,2]) %>%
+  dplyr::mutate(Donor = as.character(cell.info$Sample)) %>%
+  dplyr::mutate(tissue = as.character(cell.info$CellFromTumor)) -> bb.res
+
+bb.res %>%
+  #dplyr::filter(leiden.res.1.bbknn != 6) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = tissue), size = 0.8, alpha = 0.7) +
+  theme_bw() +
+  theme_void()
+
+bb.res %>% readr::write_rds(file.path(out.path,"meta.lung.liver.Bcell.rds.gz"), compress = "gz")
+```
+
+```{r, fig.width=9}
+rownames(umap.lung) <- rownames(lung.sce@reductions$umap@cell.embeddings)
+colnames(umap.lung) <- colnames(lung.sce@reductions$umap@cell.embeddings)
+lung.sce@reductions$umap@cell.embeddings <- umap.lung
+FeaturePlot(lung.sce, features = c("MS4A1","CD3D","LRMP","CD55"), pt.size = 0.2, cols = c("yellow","red"))
+```
+
+```{r}
+inter.gene <- intersect(rownames(matr), rownames(expr))
+inter.gene <- intersect(inter.gene, overlap_gene)
+com.expr <- cbind(matr[inter.gene,], expr[inter.gene,])
+```
+
+```{r}
+intersect(lung.sce@assays$SCT@var.features, bsce@assays$SCT@var.features) -> overlap_gene
+com.sce <- CreateSeuratObject(counts = com.expr)
+com.sce <- PercentageFeatureSet(com.sce, pattern = "^MT-", col.name = "percent.mt")
+com.sce <- SCTransform(com.sce, vars.to.regress = "percent.mt", verbose = FALSE)
+com.sce <- RunPCA(com.sce, verbose = FALSE, features = overlap_gene)
+com.sce <- RunUMAP(com.sce, dims = 1:30, verbose = FALSE)
+DimPlot(sce, label = T) + NoLegend()
+
+com.sce <- readr::read_rds(file.path(out.path,"com.lung.liver.Bcell.rds.gz"))
+```
+
+```{r, fig.width=6, fig.height=4.5}
+pca <- com.sce@reductions$pca@cell.embeddings
+anndata = import("anndata",convert=FALSE)
+sc = import("scanpy.api",convert=FALSE)
+np = import("numpy",convert=FALSE)  
+bbknn = import("bbknn", convert=FALSE)
+adata.com = anndata$AnnData(X=pca, obs=c(meta$Donor, as.character(cell.info$Sample)))
+sc$tl$pca(adata.com)
+  
+adata.com$obsm$X_pca = pca
+bbknn$bbknn(adata.com,batch_key=0)
+  
+sc$tl$umap(adata.com)
+sc$tl$leiden(adata.com, resolution = 0.8)
+umap.com = py_to_r(adata.com$obsm$X_umap)
+
+tibble::tibble(
+  leiden.res.1.bbknn = py_to_r(np$asarray(adata.com$obs$leiden)), 
+  UMAP1 = umap.com[,1], 
+  UMAP2 = umap.com[,2]) %>%
+  dplyr::mutate(Donor = c(meta$Donor, as.character(cell.info$Sample))) %>%
+  dplyr::mutate(tissue = c(as.character(meta$Tissue), as.character(cell.info$CellFromTumor))) %>%
+  dplyr::mutate(project = c(rep("liver", nrow(meta)), rep("Lung", nrow(cell.info)))) %>%
+  dplyr::mutate(ori.cluster = c(bb.res2$leiden.res.1.bbknn, rep(NA, nrow(cell.info)))) -> bb.res
+
+meta %>%
+  #dplyr::filter(!(tissue %in% c("0","1"))) %>%
+  #dplyr::filter(leiden.res.1.bbknn != "4") %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = leiden.res.1.bbknn), size = 2) +
+  theme_bw() +
+  theme_void() +
+  theme(legend.position = "none") +
+  scale_colour_manual(values = c("#FF83FA", "#66CDAA", "#AB82FF", "#00C5CD", "#00B2EE", "#FF6A6A", "#D02090"))
+```
+
+```{r, fig.width=6, fig.height=5}
+meta %>%
+  #dplyr::filter(!(tissue %in% c("0","1"))) %>%
+  #dplyr::filter(leiden.res.1.bbknn != "4") %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = tissue), size = 2) +
+  theme_bw() +
+  theme_void() +
+  theme(legend.position = "top") +
+  scale_colour_manual(values =  c("#00EEEE", "#00B2EE", "#FF69B4", "#FF3E96", "#48D1CC", "#FF8247", "#90EE90"))
+```
+
+#ROGUE detection
+```{r}
+matr <- sce@assays$RNA@counts
+matr <- t(matr)
+matr <- as.matrix(matr)
+meta <- meta %>% dplyr::mutate(ID = 1:nrow(.))
+clusters <- unique(meta$leiden.res.1.bbknn)
+patient.rogue <- function(info, cluster){
+    tmp <- meta %>% dplyr::filter(leiden.res.1.bbknn == cluster)
+    patients <- unique(meta$Donor)
+    rogue <- c()
+    for (i in 1:length(patients)) {
+        print(i)
+        index1 <- tmp %>% dplyr::filter(Donor == patients[i]) %>% dplyr::pull(ID)
+        if(length(index1) >= 20){
+            tmp.matr <- matr[index1,]
+            tmp.matr <- matr_filter(tmp.matr, min.cells = 10)
+            tmp.res <- SE_fun(tmp.matr, r = 1, span = 0.5)
+            
+            rogue[i] <- cal_rogue(tmp.res, k = 30)
+        }
+        else{
+            rogue[i] <- NA
+        }
+    }
+    return(rogue)
+}
+
+res <- list()
+
+for (i in 1:length(clusters)) {
+  res[[i]] <- patient.rogue(meta, clusters[i])
+}
+
+res.tibble <- Reduce(rbind, res) %>% as.matrix() %>% t() %>% as.tibble()
+colnames(res.tibble) <- clusters
+#c("#FF3E96", "#EE3A8C", "#D02090")
+res.tibble %>%
+  tidyr::gather(key = clusters, value = ROGUE) %>%
+  ggplot(aes(clusters, ROGUE)) +
+  geom_boxplot(color = "#FF3E96", outlier.shape = NA) +
+  geom_point(color = "#FF3E96", size = 1.5) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, colour = "black"),
+        axis.title = element_text(size = 13, colour = "black")) +
+  labs(
+    x = "Clusters",
+    y = "ROGUE"
+  )
+```
+
+
+```{r, fig.width=9}
+rownames(umap.com) <- rownames(com.sce@reductions$umap@cell.embeddings)
+colnames(umap.com) <- colnames(com.sce@reductions$umap@cell.embeddings)
+com.sce@reductions$umap@cell.embeddings <- umap.com
+FeaturePlot(com.sce, features = c("H3F3B","CD3D","LRMP","CD9"), pt.size = 0.2, cols = c("yellow","red"))
+```
+
+```{r}
+tmp.ent <- SE_fun(tmp_matr)
+tmp.ent <- matr_toli(tmp.ent, tmp_matr, n = 4)
+resolution <- c(0.5,0.8,1)
+biogene <- bio.gene(com.expr, batch = bb.res$Donor)
+
+tibble(
+  resolution = resolution
+) %>%
+  dplyr::mutate(
+    cells = purrr::map(
+      .x = resolution,
+      .f = function(.x){
+        sc$tl$leiden(adata.com, resolution = .x)
+        return(py_to_r(np$asarray(adata.com$obs$leiden)))
+      }
+    )
+  ) %>%
+  dplyr::mutate(
+    rogue = purrr::map(
+      .x = cells,
+      .f = function(.x){
+        tmp_cluster <- .x
+        table(cluster = .x) %>%
+          as.tibble() %>%
+          dplyr::mutate(
+            rogue = purrr::map_dbl(
+              .x = cluster,
+              .f = function(.x){
+                ent_tmp <- NA
+                tmp_matr <- com.expr[tmp_cluster == .x,]
+                cell_num <- ceiling(nrow(tmp_matr*0.05))
+                if(cell_num > 5){
+                  cell_num = 5
+                }
+                tmp_matr <- matr_filter(tmp_matr, min.cells = cell_num)
+                ent_tmp <- SE_fun(tmp_matr, span = 0.2)
+                ent_tmp <- matr_toli(ent_tmp, tmp_matr, n = cell_num, span = 0.2)
+                if(is.na(ent_tmp)){
+                  ent_tmp <- SE_fun(tmp_matr, span = 0.5)
+                  ent_tmp <- matr_toli(ent_tmp, tmp_matr, n = cell_num, span = 0.5)
+                }
+                ent_tmp <- ent_tmp %>% filter(Gene %in% overlap_gene)
+                cal_rogue(ent_tmp)
+              }
+            )
+          )
+      }
+    )
+  ) -> res
+
+a <- res
+a %>%
+  dplyr::mutate(
+    rogue = purrr::map(
+      .x = rogue,
+      .f = function(.x)
+      .x %>%
+        dplyr::mutate(rogue = ifelse(rogue > 0.91,0.91, rogue))
+    )
+  ) -> a
+
+a <- get_rogue_inc(a[-3,])
+a <- a[-3,]
+ggplot(aes(1:nrow(a), a$average.rogue), data = NULL) +
+  geom_line(colour = '#FF3E96') +
+  geom_point(colour = '#FF3E96', size = 2) +
+  scale_x_continuous(
+    breaks = c(1:nrow(a)),
+    label = paste(1:nrow(a), "_clusters", sep = "")
+) +
+  theme_bw() +
+  theme(
+    legend.position = 'none',
+    axis.title = element_text(size = 15,color="black"),
+    axis.text = element_text(size = 12,color="black"),
+    legend.title = element_text(size = 0),
+    legend.text = element_text(size = 0),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black", angle = 40, hjust = 1)
+  ) +
+  labs(
+    x = " ",
+    y = "ROGUE"
+  )
+```
+
+
+```{r, fig.height=8, fig.width=8}
+Idents(com.sce) <- bb.res$leiden.res.1.bbknn
+b.markers <- FindAllMarkers(sce, only.pos = TRUE, min.pct = 0.25, test.use = "t")
+top10 <- b.markers %>% 
+  dplyr::mutate(cluster = as.character(cluster)) %>%
+  group_by(cluster) %>% top_n(n = 10, wt = avg_logFC) %>% 
+  dplyr::arrange(cluster)
+DoHeatmap(sce, top10$gene)
+marker.matr <- function(tmp.sce, gene){
+
+  matr <- as.matrix(tmp.sce@assays$SCT@scale.data)
+  gene <- intersect(gene, rownames(matr))
+  matr <- matr[gene,]
+
+  tibble(cluster = as.numeric(unique(Idents(tmp.sce)))-1) %>%
+    dplyr::mutate(
+      expr = purrr::map(
+        .x = cluster,
+        .f = function(.x){
+          tmp.matr <- matr[,Idents(tmp.sce) == .x]
+          rowMeans(tmp.matr)
+        }
+      )
+    ) -> tmp.res
+
+  matr <- Reduce(rbind, tmp.res$expr)
+  matr <- as.data.frame(matr)
+  rownames(matr) <- paste("C", tmp.res$cluster, sep = "")
+  return(matr)
+}
+pda <- marker.matr(sce, top10$gene)
+pda %>%
+  tibble::rownames_to_column(var = "Cluster") %>%
+  dplyr::mutate_if(is.numeric, funs((. - mean(.))/sd(.))) %>%
+  tidyr::gather(key = "Gene", value = "expr", -Cluster) %>%
+  ggplot(aes(Cluster, factor(Gene, levels = rev(unique(top10$gene))))) +
+  geom_tile(aes(fill = expr)) +
+  #scale_fill_distiller(palette = "Spectral") +
+  theme(strip.text.x = element_blank(), 
+        axis.title = element_text(size = 15), 
+        axis.text = element_text(size = 9), 
+        legend.title = element_text(size = 13), 
+        legend.text = element_text(size = 13), 
+        axis.text.y = element_text(color = "black"), 
+        axis.text.x = element_text(color = "black"), 
+        panel.background = element_rect(colour = "black", fill = "white"), 
+        panel.grid = element_line(colour = "grey", linetype = "dashed"), 
+        panel.grid.major = element_line(colour = "grey", linetype = "dashed", size = 0.2)) + 
+  #facet_grid(. ~ group, scales = "free", space = "free") + 
+  scale_fill_distiller(palette = "RdBu") + 
+  labs(x = "", y = "")
+```
+```{r}
+vln.matr <- function(tmp.sce, gene){
+
+  matr <- as.matrix(tmp.sce@assays$RNA@counts)
+  gene <- intersect(gene, rownames(matr))
+  matr <- matr[gene,]
+  matr <- log2(matr+1)
+
+  tibble(cluster = c(0:6)) %>%
+    dplyr::mutate(
+      expr = purrr::map(
+        .x = cluster,
+        .f = function(.x){
+          tmp.matr <- matr[,Idents(tmp.sce) == .x]
+          rowMeans(tmp.matr)
+        }
+      )
+    ) -> tmp.res
+
+  matr <- Reduce(rbind, tmp.res$expr)
+  matr <- as.data.frame(matr)
+  rownames(matr) <- paste("C", tmp.res$cluster, sep = "")
+  return(matr)
+}
+VlnPlot(sce, features = c("CD79A","MS4A1","CD19","CD3D","CD3E","CD8A","CD4","IL7R"))
+vda <- vln.matr(sce, gene = c("CD79A","MS4A1","CD19","CD3D","CD3E","CD8A","CD4","IL7R"))
+vda <- vda %>% dplyr::mutate(cluster = as.character(0:6))
+matr <- log2(matr+1)
+sub.matr <- matr[,c("CD79A","MS4A1","CD19","CD3D","CD3E","CD8A","CD4","IL7R")]
+col.mean <- colMeans(sub.matr)
+markers <- c("CD79A","MS4A1","CD19","CD3D","CD3E","CD8A","CD4","IL7R")
+vp <- list()
+for (i in 1:length(markers)) {
+  tmp.vda <- vda[,c(i,9)]
+  colnames(tmp.vda) <- c("mean", "cluster")
+
+  sub.matr[,i] %>%
+    as.tibble() %>%
+    dplyr::mutate(cluster = meta$leiden.res.1.bbknn) %>%
+    dplyr::left_join(tmp.vda, by = "cluster") %>%
+    ggplot(aes(cluster, value)) +
+    geom_violin(aes(fill = mean), scale = "width", colour = "black", lwd = 0.6) +
+    theme_classic() +
+    scale_fill_gradient(low ="yellow", high = "red") +
+    theme(axis.text = element_text(size = 13, colour = "black"),
+          axis.title = element_text(size = 15, colour = "black")) -> vp[[i]]
+  
+  ggsave(filename = paste0(markers[i],".pdf"), plot = vp[[i]], width = 5.3, height = 2.6, units = "in", 
+         path = "/home/pauling/projects/04_SEmodel/04_figures/05_ROGUE/03.Bcell/07.vlnplot.marker")
+}
+
+```
+
+```{r, fig.width=4, fig.height=5}
+meta.sub <- meta %>% dplyr::filter(project == "Lung")
+
+cluster.table <- table(meta.sub$leiden.res.1.bbknn, meta.sub$tissue)
+cluster.table %>%
+  as.data.frame() %>%
+  dplyr::mutate(
+    p.value = purrr::pmap_dbl(
+      list(
+        .x = Var1,
+        .y = Var2,
+        .z = Freq
+      ),
+      .f = function(.x, .y, .z){
+        a <- .z
+        b <- sum(cluster.table[,.y]) - a
+        c <- sum(cluster.table[.x,]) - a
+        d <- sum(cluster.table) - a - b - c
+        
+        #o <- fisher.test(matrix(c(a, b,c, d), ncol = 2), alternative = "greater")
+        #o$estimate
+        o <- chisq.test(matrix(c(a, b, c, d), ncol = 2))
+        oe <- o$observed/o$expected
+        oe[1,1]
+      }
+    )
+  ) -> enrich.res
+
+#adj.p.value <- p.adjust(enrich.res$p.value, method = "BH")
+#enrich.res <- enrich.res %>% dplyr::mutate(adj.p.value = adj.p.value)
+enrich.res %>%
+  dplyr::rename(`Ro/e` = p.value) %>%
+  #dplyr::mutate(p.value = ifelse(p.value < 1, -1/p.value, p.value)) %>%
+  #dplyr::mutate(`-log10(adj.P-value)` = -log10(adj.p.value)) %>%
+  ggplot(aes(Var2, Var1, fill = `Ro/e`)) +
+  geom_tile(colour = "white", lwd = 0.8) +
+  theme(axis.title = element_text(size = 12)) +
+  theme(axis.text = element_text(size = 12)) +
+  theme(legend.title = element_text(size = 10)) +
+  theme(legend.text = element_text(size = 10)) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
+  theme(axis.text.y = element_text(color="black"),
+        axis.text.x = element_text(color="black" ,angle = 45, hjust = 1)) +
+  scale_fill_distiller(palette = "Spectral")
+```
+
+```{r, fig.width=5, fig.height=3.7}
+a <- meta %>% dplyr::filter(leiden.res.1.bbknn == 4) %>% dplyr::filter(project == "liver")
+a <- table(a$Donor, a$tissue) %>% as.data.frame()
+a %>%
+  as.data.frame() %>%
+  tidyr::spread(key = "Var2", value = "Freq") %>%
+  as.data.frame() %>%
+  tibble::column_to_rownames(var = "Var1") -> sda
+
+sda2 <- t(sda) %>% as.data.frame() %>% dplyr::mutate_all(funs((./sum(.))))
+rownames(sda2) <- colnames(sda)
+sda2 %>%
+  tibble::rownames_to_column(var = "Tissue") %>%
+  tidyr::gather(key = "Donor", value = "fraction", -Tissue) -> a
+
+
+tibble(Tissue = rownames(sda2)) %>%
+  dplyr::mutate(mean = purrr::map_dbl(.x = Tissue, function(.x){mean(unlist(sda2[.x,]))})) %>%
+  dplyr::mutate(sem = purrr::map_dbl(.x = Tissue, function(.x){sd(unlist(sda2[.x,]))/sqrt(5)})) %>%
+  dplyr::mutate(ymax = mean+sem) %>%
+  dplyr::mutate(ymin = mean-sem) %>%
+  ggplot(aes(factor(Tissue, levels = c("Tumor","Lymphnode","Blood", "Normal",  "Ascites")), mean)) +
+  geom_col(aes(fill = Tissue), colour = "black") +
+  scale_fill_manual(values = c("#009ACD", "#EE3A8C", "#EE82EE", "#20B2AA", "#FF7F50")) +
+  geom_errorbar(aes(ymin = ymin, ymax = ymax), width = 0.2) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  #geom_point(aes(Tissue, fraction, colour = Donor), a) +
+  theme(axis.title = element_text(size = 12)) +
+  theme(axis.text = element_text(size = 12)) +
+  theme(legend.title = element_text(size = 10)) +
+  theme(axis.text.y = element_text(color="black"),
+        axis.text.x = element_text(color="black")) +
+  labs(
+    x = "",
+    y = "Fraction"
+  ) +
+  ylim(0,0.9) #-> p
+
+#ggsave("09.Liver.C2.diff.oe.bar.pdf", plot = p, width = 5, height = 3.7, units = "in",
+       #path = "/home/pauling/projects/04_SEmodel/04_figures/05_ROGUE/03.Bcell")
+```
+
+```{r}
+for (i in 1:1) {
+    print(t.test(unlist(sda2[2,]), unlist(sda2[i,]), alternative = "greater"))
+}
+```
+
+
+```{r, fig.width=2.5, fig.height=3}
+a <- meta %>% dplyr::filter(leiden.res.1.bbknn == 4) %>% dplyr::filter(project == "Lung")
+a <- table(a$Donor, a$tissue) %>% as.data.frame()
+a %>%
+  as.data.frame() %>%
+  tidyr::spread(key = "Var2", value = "Freq") %>%
+  as.data.frame() %>%
+  tibble::column_to_rownames(var = "Var1") -> sda
+
+sda2 <- t(sda) %>% as.data.frame() %>% dplyr::mutate_all(funs((./sum(.))))
+rownames(sda2) <- colnames(sda)
+sda2 %>%
+  tibble::rownames_to_column(var = "Tissue") %>%
+  tidyr::gather(key = "Donor", value = "fraction", -Tissue) -> a
+
+#c("#009ACD", "#EE3A8C", "#EE82EE", "#20B2AA", "#FF7F50")
+tibble(Tissue = rownames(sda2)) %>%
+  dplyr::mutate(mean = purrr::map_dbl(.x = Tissue, function(.x){mean(unlist(sda2[.x,]))})) %>%
+  dplyr::mutate(sem = purrr::map_dbl(.x = Tissue, function(.x){sd(unlist(sda2[.x,]))/sqrt(8)})) %>%
+  dplyr::mutate(ymax = mean+sem) %>%
+  dplyr::mutate(ymin = mean-sem) %>%
+  ggplot(aes(factor(Tissue, levels = c(1,0)), mean)) +
+  geom_col(aes(fill = Tissue), colour = "black") +
+  scale_fill_manual(values = c("#20B2AA", "#FF7F50")) +
+  geom_errorbar(aes(ymin = ymin, ymax = ymax), width = 0.2) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  #geom_jitter(aes(Tissue, fraction, colour = Donor), a, width = 0.1, height = 0) +
+  theme(axis.title = element_text(size = 12)) +
+  theme(axis.text = element_text(size = 12)) +
+  theme(legend.title = element_text(size = 10)) +
+  theme(axis.text.y = element_text(color="black"),
+        axis.text.x = element_text(color="black")) +
+  labs(
+    x = "",
+    y = "Fraction"
+  ) +
+  ylim(0,1) -> p
+
+ggsave("10.Lung.C4.diff.oe.bar.pdf", plot = p, width = 2.5, height = 3, units = "in",
+       path = "/home/pauling/projects/04_SEmodel/04_figures/05_ROGUE/03.Bcell")
+```
+
+
+
+#ROGUE analysis
+```{r, fig.width=6, fig.height=4.5}
+meta <- readr::read_rds("/home/pauling/projects/04_SEmodel/01_data/08_lung_Bcells/meta.lung.liver.Bcell.rds.gz")
+meta <- meta %>% dplyr::rename(patient = Donor)
+meta <- as.data.frame(meta)
+
+rownames(meta) <- colnames(com.sce)
+com.sce <- AddMetaData(com.sce, meta)
+
+pca <- com.sce@reductions$pca@cell.embeddings
+anndata = import("anndata",convert=FALSE)
+sc = import("scanpy.api",convert=FALSE)
+np = import("numpy",convert=FALSE)
+bbknn = import("bbknn", convert=FALSE)
+
+adata.lung = anndata$AnnData(X=pca, obs=com.sce$patient)
+sc$tl$pca(adata.lung)
+  
+adata.lung$obsm$X_pca = pca
+bbknn$bbknn(adata.lung, batch_key=0)
+
+sc$tl$umap(adata.lung)
+
+res <- list()
+reso <- c(0.3,0.4,0.5,0.6,0.7,0.8)
+for (i in 1:length(reso)) {
+  sc$tl$leiden(adata.lung, resolution = reso[i])
+  umap.lung = py_to_r(adata.lung$obsm$X_umap)
+  
+  print(i)
+  
+  tibble::tibble(
+    leiden.res.1.bbknn = py_to_r(np$asarray(adata.lung$obs$leiden)), 
+    UMAP1 = umap.lung[,1], 
+    UMAP2 = umap.lung[,2]) %>%
+    dplyr::mutate(Donor = as.character(com.sce$patient)) %>%
+    dplyr::mutate(tissue = as.character(com.sce$tissue)) -> res[[i]]
+}
+
+
+res[[5]] %>%
+  #dplyr::filter(!(tissue %in% c("0","1"))) %>%
+  dplyr::filter(leiden.res.1.bbknn != "4") %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = leiden.res.1.bbknn), size = 2) +
+  theme_bw() +
+  theme_void() +
+  theme(legend.position = "none") +
+  scale_colour_manual(values = c("#FF83FA", "#66CDAA", "#AB82FF", "#00C5CD", "#00B2EE", "#FF6A6A", "#D02090"))
+```
+
+```{r}
+matr <- com.sce@assays$RNA@counts
+matr <- t(matr)
+matr <- as.matrix(matr)
+tmp.info <- res[[5]] %>% dplyr::mutate(ID = 1:nrow(.))
+clusters <- unique(tmp.info$leiden.res.1.bbknn)
+patient.rogue <- function(info, cluster){
+    tmp <- info %>% dplyr::filter(leiden.res.1.bbknn == cluster)
+    patients <- unique(info$Donor)
+    rogue <- c()
+    for (i in 1:length(patients)) {
+        print(i)
+        index1 <- tmp %>% dplyr::filter(Donor == patients[i]) %>% dplyr::pull(ID)
+        if(length(index1) >= 20){
+            tmp.matr <- matr[index1,]
+            #tmp.matr <- matr_filter(tmp.matr, min.cells = 10)
+            tmp.res <- SE_fun(tmp.matr, r = 1, span = 0.5)
+            
+            rogue[i] <- cal_rogue(tmp.res, k = 20)
+        }
+        else{
+            rogue[i] <- NA
+        }
+    }
+    return(rogue)
+}
+
+res.rogue <- list()
+
+for (i in 1:length(clusters)) {
+  res.rogue[[i]] <- patient.rogue(tmp.info, clusters[i])
+}
+
+res.tibble <- Reduce(rbind, res.rogue) %>% as.matrix() %>% t() %>% as.tibble()
+colnames(res.tibble) <- clusters
+#c("#FF3E96", "#EE3A8C", "#D02090")
+res.tibble %>%
+  tidyr::gather(key = clusters, value = ROGUE) %>%
+  ggplot(aes(clusters, ROGUE)) +
+  geom_boxplot(color = "#FF3E96", outlier.shape = NA) +
+  geom_point(color = "#FF3E96", size = 1.5) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12, colour = "black"),
+        axis.title = element_text(size = 13, colour = "black")) +
+  labs(
+    x = "Clusters",
+    y = "ROGUE"
+  )
+```
+
+```{r, fig.width=8, fig.height=8}
+gs <- readr::read_tsv("/home/pauling/projects/02_data/18_Enrichment/c2.cp.kegg.v6.2.symbols.gmt", col_names = F)
+gs <- gs[,-2]
+gs <- gs %>% tidyr::gather(key = "pathway", value = "sets", -X1)
+gs <- gs %>% dplyr::filter(sets %in% rownames(com.sce))
+table(gs$sets) %>% 
+  as.data.frame() %>% 
+  as.tibble() %>% 
+  dplyr::arrange(desc(Freq)) %>% 
+  dplyr::filter(Freq == 1) %>% 
+  dplyr::pull(Var1) -> unique.gene
+gs <- gs %>% dplyr::filter(sets %in% unique.gene)
+
+terms <- unique(gs$X1)
+geneSets <- list()
+for (i in 1:length(terms)) {
+  genesets <- gs %>% dplyr::filter(X1 == terms[i]) %>% dplyr::pull(sets)
+  geneSets[[terms[i]]] <- genesets
+}
+
+y <- as.matrix(com.sce@assays$SCT@data)
+gsva_es <- gsva(y, geneSets, mx.diff=1)
+
+sce.gsva <- CreateSeuratObject(counts = gsva_es)
+Idents(sce.gsva) <- Idents(com.sce)
+fib.markers <- FindAllMarkers(sce.gsva, only.pos = TRUE, min.pct = 0, logfc.threshold = 0.1, test.use = "t")
+top10 <- fib.markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC) %>% dplyr::mutate(gene = stringr::str_replace_all(gene, "-", "_"))
+sce.gsva@assays$RNA@scale.data <- gsva_es
+DoHeatmap(sce.gsva, features = top10$gene) + NoLegend()
+
+tibble(cluster = as.numeric(unique(Idents(com.sce)))-1) %>%
+    dplyr::mutate(
+      expr = purrr::map(
+        .x = cluster,
+        .f = function(.x){
+          tmp.matr <- gsva_es[,Idents(com.sce) == .x]
+          rowMeans(tmp.matr)
+        }
+      )
+    ) -> tmp.res
+
+tmp.res <- Reduce(rbind, tmp.res$expr)
+tmp.res <- as.data.frame(tmp.res)
+rownames(tmp.res) <- paste("Fibro_C", as.numeric(unique(Idents(com.sce)))-1, sep = "")
+tmp.res <- tmp.res[,top10$gene]
+tmp.res %>%
+  tibble::rownames_to_column(var = "Cluster") %>%
+  dplyr::mutate_if(is.numeric, funs((. - mean(.))/sd(.))) %>%
+  tidyr::gather(key = "Gene", value = "expr", -Cluster) %>%
+  ggplot(aes(factor(Cluster, levels = paste0("Fibro_C",unique(top10$cluster))), factor(Gene, levels = rev(unique(top10$gene))))) +
+  geom_tile(aes(fill = expr), color = "white", lwd = 0.8) +
+  #scale_fill_distiller(palette = "Spectral") +
+  theme(strip.text.x = element_blank(), 
+        axis.title = element_text(size = 15), 
+        axis.text = element_text(size = 9), 
+        legend.title = element_text(size = 13), 
+        legend.text = element_text(size = 13), 
+        axis.text.y = element_text(color = "black"), 
+        axis.text.x = element_text(color = "black",angle = 45, hjust = 1), 
+        panel.background = element_rect(colour = "black", fill = "white"), 
+        panel.grid = element_line(colour = "grey", linetype = "dashed"), 
+        panel.grid.major = element_line(colour = "grey", linetype = "dashed", size = 0.2)) + 
+  #facet_grid(. ~ group, scales = "free", space = "free") + 
+  scale_fill_distiller(palette = "Spectral") + 
+  labs(x = "", y = "")
+```

@@ -1,0 +1,119 @@
+"0","```r
+pro_da <- function(.x){
+  row_name <- rownames(.x)
+  .x <- as.data.frame(.x)
+  .x <- lapply(.x, as.numeric) %>% do.call(\"data.frame\", .)
+  rownames(.x) <- row_name
+  return(.x)
+}
+cal_r <- function(.x){
+  u <- mean(.x)
+  v <- var(.x)
+  p <- (v-u)/v
+  r <- u^2/(v-u)
+  c(u,v,r,p)
+}
+cal_ds <- function(ent, inter){+++++  
+  tmp <- ent %>% 
+    #dplyr::filter(mean.expr > 0) %>%
+    dplyr::arrange(mean.expr) %>%
+    dplyr::mutate(pro.expr = ceiling(mean.expr/inter))
+  
+  tmp %>%
+    dplyr::mutate(
+      cb = purrr::map2(
+        .x = pro.expr,
+        .y = entropy,
+        .f = function(.x, .y){
+          tp <- tmp %>% dplyr::filter(pro.expr == .x)
+          if(nrow(tp)>9){
+            tp %>%
+              dplyr::pull(entropy) %>%
+              median() -> ent
+            
+            pv <- pnorm(.y, mean = mean(tp$entropy), sd = sd(tp$entropy))
+          }
+          else{
+            tp1 <- c()
+            tmp %>% dplyr::filter(pro.expr < .x) -> tp1
+            if(nrow(tp1) > 4){
+              tp1 <- tp1 %>% dplyr::slice((nrow(.)-4):nrow(.))
+            }
+              
+            tmp %>%
+              dplyr::filter(pro.expr > .x) %>%
+              dplyr::slice(1:5) -> tp2
+            
+            ctp <- rbind(tp1,tp2)
+            ctp <- rbind(ctp,tp)
+            ctp %>%
+              dplyr::arrange(entropy) %>%
+              dplyr::slice(-c(1:2)) %>%
+              dplyr::slice(-c((nrow(.)-1):nrow(.))) -> ctp
+            
+            ent <- mean(ctp$entropy)
+            
+            pv <- pnorm(.y, mean = mean(ctp$entropy), sd = sd(ctp$entropy))
+          }
+          c(ent, pv)
+        }
+      )
+    ) %>%
+    dplyr::mutate(fit = purrr::map_dbl(cb,function(.x){.x[1]})) %>%
+    dplyr::mutate(pv2 = purrr::map_dbl(cb,function(.x){.x[2]})) %>%
+    dplyr::mutate(ds = fit - entropy) %>%
+    dplyr::mutate(pv = 1-pnorm(.$ds, mean = mean(.$ds), sd = sd(.$ds)))
+}
+cal_rogue <- function(.x, cutoff = 0.05, k = 45, cf.ds = 0){
+  sig_value <- abs(.x$ds[.x$p.adj < cutoff & .x$p.value < cutoff & .x$ds > cf.ds])
+  #a <- 
+  sig_value <- sum(sig_value)
+  1-sig_value/(sig_value+k)
+  #a/(sum(abs(.x$ds))+5)
+}
+cal_des <- function(.x){ 
+  .x <- .x + 1
+  tibble(
+    gene = colnames(.x),
+    mean.expr = colMeans(.x)
+  ) -> tmp
+  
+  .x <- log(.x)
+  tmp %>%
+    dplyr::mutate(E1 = colMeans(.x)) %>%
+    dplyr::mutate(E2 = log(mean.expr)) %>%
+    dplyr::mutate(ds = E2 - E1) -> tmp
+  
+  return(tmp)
+}
+Entropy <- function(expr, window=1, r = 0.01){ 
+  n_threads <- getOption(\"scibet.n_threads\")
+  #expr <- as.data.frame(expr)
+
+  ent_res <- tibble(
+    gene = colnames(expr),
+    mean.expr = log(colMeans(expr)+r)
+  )
+
+  expr <- expr[,ent_res$gene]
+  out <- GenEntr(expr, window, n_threads)
+
+  ent_res %>%
+    dplyr::mutate(entropy = out) -> ent_res
+
+  return(ent_res)
+}
+Entropy <- function(expr, r = 0.01){
+  tmp <- log(expr+1)
+  entropy <- colMeans(tmp)
+  mean.expr <- log(colMeans(expr)+r)
+  
+  ent_res <- tibble(
+    Gene = colnames(expr),
+    mean.expr = mean.expr,
+    entropy = entropy
+  )
+  
+  return(ent_res)
+}
+```"
