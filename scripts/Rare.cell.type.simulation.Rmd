@@ -1,0 +1,339 @@
+---
+title: "Rare cell type detection"
+output: html_notebook
+---
+
+```{r}
+#Generate simulated data using RaceID intestinal data
+library(RaceID)    #RaceID3
+library(tidyverse)
+library(ggsci)
+library(ROGUE)
+library(Seurat)
+
+## input data
+x <- read.csv("/home/pauling/projects/04_SEmodel/07_NC_revision/03.data/02.Rare.cell.type/01.simulation/transcript_counts_intestine.xls",sep="\t",header=TRUE)
+rownames(x) <- x$GENEID
+
+prdata <- x[grep("ERCC",rownames(x),invert=TRUE),-1]
+
+
+##
+# initialize SCseq object with transcript counts
+sc <- SCseq(prdata)
+sc <- filterdata(sc, mintotal=3000, minexpr=5, minnumber=1)
+
+#seed used to select cell
+seed_means = 10
+set.seed(seed_means)
+ssc_array = prdata
+mean_genes = rowMeans(ssc_array)
+#bootstrap sampling
+ssc = sample(mean_genes,length(mean_genes),replace = TRUE)
+####### Lan code ######
+ssc[ssc<0.5] = 0               #filter extremely low expressed genes
+names(ssc) = rownames(prdata)  #because length(unique(names(ssc))) = 14870
+#######################
+
+num_genes = length(ssc)
+size_clusters = c(1000,1000,10,30,20)
+
+
+sim_data = matrix(nrow = nrow(prdata),ncol=sum(size_clusters)) #simulated dataset
+rownames(sim_data) = rownames(prdata)
+colnames(sim_data) = apply(matrix(1:sum(size_clusters)),1,function(x){paste('C',x,sep='')}) #C1: Cell_1
+
+#seed used to permute gene
+seed_permute = seq(from = 10000, by = 100, length.out = length(size_clusters)-1) 
+#seed used to sample cells from each gene distribution
+seed_sample = matrix(seq(from = 1000, by = 5, length.out = length(size_clusters)*num_genes),
+                     nrow=length(size_clusters)) 
+
+fit <- sc@background$vfit
+lvar  <- function(x,fit) 2**(coef(fit)[1] + log2(x)*coef(fit)[2] + coef(fit)[3] * log2(x)**2)
+lsize <- function(x,lvar,fit) x**2/(max(x + 1e-6,lvar(x,fit)) - x)
+
+permutedGenes<-c()
+for (id_c in 1:length(size_clusters)){
+  if(id_c == 1){
+    mean_expr = ssc #mean expression values for each gene in cluster 1 (1e-6 avoid generating NA)
+    lsize_expr = apply(matrix(mean_expr),1,function(x){lsize(x, lvar, fit)})
+    num_id_c = size_clusters[id_c]#cell number
+    sim_data[,1:num_id_c]  = t(apply(matrix(1:num_genes),1,function(i){
+      set.seed(seed_sample[id_c,i])
+      rnbinom(n=num_id_c,mu=mean_expr[i],size=lsize_expr[i])
+    }))
+  }else if(id_c>1){
+    set.seed(seed_permute[id_c-1])
+    id_permuted_genes = sample(which(ssc>=10),size = 100,replace=FALSE)  #permute 100 genes
+    permutedGenes<-c(permutedGenes,id_permuted_genes)
+    set.seed(seed_permute[id_c-1])
+    id_low_genes = sample(which(ssc<10),size = 100,replace=FALSE)
+    mean_expr = ssc
+    mean_expr[sort(c(id_permuted_genes,id_low_genes))] = mean_expr[c(id_permuted_genes,id_low_genes)] 
+    lsize_expr = apply(matrix(mean_expr),1,function(x){lsize(x, lvar, fit)})
+    num_id_c = size_clusters[id_c]#cell number
+    sim_data[,(sum(size_clusters[1:(id_c-1)])+1):sum(size_clusters[1:id_c])]= t(apply(matrix(1:num_genes),1,function(i){
+      set.seed(seed_sample[id_c,i])
+      rnbinom(n=num_id_c,mu=mean_expr[i],size=lsize_expr[i])
+    }))
+  }
+}
+
+sim_data[is.na(sim_data)] <- 0
+sim_data %>% readr::write_rds("/home/pauling/projects/04_SEmodel/07_NC_revision/03.data/02.Rare.cell.type/01.simulation/02.sim.1000.1000.10.30.20.rds.gz", compress = "gz")
+```
+
+```{r, fig.width=6, fig.height=5}
+#sim_data <- readr::read_rds("/home/pauling/projects/04_SEmodel/07_NC_revision/03.data/02.Rare.cell.type/01.simulation/02.sim.1000.1000.10.30.20.rds.gz")
+fig.path <- "/home/pauling/projects/04_SEmodel/07_NC_revision/02.figures/05.rare.cell.type/01.simulation/01.1000.1000.10.30.20"
+
+sc <- SCseq(sim_data)
+# filtering of expression data
+sc <- filterdata(sc, mintotal=1000, minexpr=5, minnumber=1)
+# k-means clustering
+sc <- compdist(sc, FSelect = T, metric="pearson")
+#sc <- clustexp(sc, clustnr=20,bootnr=50,cln=0,rseed=17000)
+sc <- clustexp(sc, cln=2, sat=FALSE, bootnr = 20)
+# compute t-SNE map
+sc <- comptsne(sc,rseed=15555)
+# detect outliers and redefine clusters
+sc <- findoutliers(sc, outminc=20,outlg=20,probthr=1e-3,outdistquant=.95)
+plotmap(sc, final = T)
+
+
+sim.label <- c(rep(1, size_clusters[1]),
+  rep(2, size_clusters[2]),
+  rep(3, size_clusters[3]),
+  rep(4, size_clusters[4]),
+  rep(5, size_clusters[5]))
+
+tibble(Ground.truth = sim.label, Clusters = paste0("Clusters ",sc@cpart)) %>%
+  dplyr::count(Ground.truth, Clusters) -> pda
+
+ggplot(pda,aes(y = sqrt(n), axis1 = Ground.truth, axis2 = Clusters)) +
+  geom_alluvium(aes(fill = Clusters), width = 1/8, alpha = alpha, knot.pos = 0.4, colour = "white") +
+  geom_stratum(width = 1/5, color = "grey") +
+  geom_text(stat = "stratum", infer.label = TRUE) +
+  scale_x_continuous(breaks = 1:2, labels = c("Ground truth", "Clusters"))     +
+  scale_fill_manual(values = my.co[-3]) +
+  #scale_color_manual(values = my.co) +
+  theme_void() +
+  theme(
+   axis.text.x = element_text(size = 12, colour = "black")
+  ) -> p
+
+ggsave(plot = p, filename = "02.RaceID.diagram.pdf", path = fig.path, width = 5.5, height = 5)
+p
+
+```
+
+```{r}
+pauling.theme <- function(poi = "right", size = 12, title.size = 13){
+  theme(
+    legend.position = poi,
+    axis.title = element_text(size = title.size,color="black"),
+    axis.text = element_text(size = size,color="black"),
+    legend.title = element_text(size = size),
+    legend.text = element_text(size = size),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black"))
+}
+```
+
+
+```{r, fig.width=5, fig.height=3.8}
+res1 <- SE_fun(sim_data)
+sce <- CreateSeuratObject(counts = sim_data[res1$Gene,])
+sce <- NormalizeData(sce, normalization.method = "LogNormalize", scale.factor = 10000)
+all.genes <- rownames(sce)
+sce <- ScaleData(sce, features = all.genes)
+
+feature.name <- stringr::str_replace_all(res1$Gene, "_", "-")
+
+sce.se <- RunPCA(sce, features = feature.name[1:500])
+sce.se <- FindNeighbors(sce.se, dims = 1:20)
+sce.se <- FindClusters(sce.se, resolution = 0.1)
+sce.se <- RunUMAP(sce.se, dims = 1:20)
+DimPlot(sce.se) + scale_color_npg() -> p
+
+ggsave(plot = p, filename = "02.SE.seurat.umap.pdf", path = fig.path, width = 5, height = 3.8)
+
+sce.se@reductions$umap@cell.embeddings %>%
+  as.tibble() %>%
+  dplyr::mutate(label = c(rep(1, size_clusters[1]),
+                          rep(2, size_clusters[2]),
+                          rep(3, size_clusters[3]),
+                          rep(4, size_clusters[4]),
+                          rep(5, size_clusters[5]))) %>% 
+  ggplot(aes(UMAP_1,UMAP_2)) + 
+  geom_point(aes(colour = factor(label)), size = 0.5) +
+  theme_bw() +
+  scale_color_npg()
+```
+
+```{r, fig.width=5.8, fig.height=5}
+tibble(Ground.truth = sim.label,
+       Clusters = as.numeric(Idents(sce.se))) %>%
+  dplyr::mutate(Clusters = paste0("Cluster ",Clusters)) %>%
+  dplyr::count(Ground.truth, Clusters) -> pda
+
+ggplot(pda,aes(y = sqrt(n), axis1 = Ground.truth, axis2 = Clusters)) +
+  geom_alluvium(aes(fill = Clusters), width = 1/8, alpha = alpha, knot.pos = 0.4, colour = "white") +
+  geom_stratum(width = 1/5, color = "grey") +
+  geom_text(stat = "stratum", infer.label = TRUE) +
+  scale_x_continuous(breaks = 1:2, labels = c("Ground truth", "Clusters"))     +
+  scale_fill_manual(values = my.co[-3]) +
+  #scale_color_manual(values = my.co) +
+  theme_void() +
+  theme(
+   axis.text.x = element_text(size = 12, colour = "black")
+  ) -> p
+
+ggsave(plot = p, filename = "03.SE.seurat.diagram.pdf", path = fig.path, width = 5.8, height = 5)
+
+p
+```
+
+
+```{r, fig.width=5, fig.height=4}
+res1 <- res1 %>% dplyr::mutate(flag= ifelse(Gene %in% res1$Gene[1:500], "1", "0"))
+res1 %>%
+  ggplot(aes(mean.expr, entropy)) +
+  geom_point(aes(colour = factor(flag)), size = 1) +
+  geom_line(aes(mean.expr, fit), lwd = 0.7) +
+  scale_color_manual(values = c("#1E90FF", "red")) +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 15,color="black"),
+    axis.text = element_text(size = 15,color="black"),
+    legend.title = element_text(size = 0),
+    legend.text = element_text(size = 0),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black")
+  ) +
+  labs(
+    x = "log(mean expression)",
+    y = "expression entropy"
+  ) -> p
+
+ggsave(plot = p, filename = "02.SE.gene.pdf", path = fig.path, width = 5, height = 4)
+p
+```
+
+```{r}
+minCellNum = 3
+# filtering, remove genes expressed in fewer than minCellNum cells
+minGeneNum = 1
+# filtering, remove cells expressed in fewer than minGeneNum genes
+expressed_cutoff = 1
+# filtering, for raw counts
+gini.bi = 0
+# fitting, default is 0, for qPCR data, set as 1
+log2.expr.cutoffl = 0
+# cutoff for range of gene expression
+log2.expr.cutoffh = 20
+# cutoff for range of gene expression
+Gini.pvalue_cutoff = 0.0001
+# fitting, Pvalue, control how many Gini genes chosen
+Norm.Gini.cutoff = 1
+# fitting, NormGini, control how many Gini genes chosen, 1 means not used
+span = 0.9
+# parameter for LOESS fitting
+outlier_remove = 0.75
+# parameter for LOESS fitting
+GeneList = 1
+# parameter for clustering, 1 means using pvalue, 0 means using HighNormGini
+Gamma = 0.9
+# parameter for clustering
+diff.cutoff = 1
+# MAST analysis, filter genes that don't have high log2_foldchange to reduce gene num
+lr.p_value_cutoff = 1e-5
+# MAST analysis, pvalue cutoff to identify differentially expressed genes
+CountsForNormalized = 100000
+# if normalizing- by default not used
+
+Rfundir = "/home/pauling/projects/03_tools/giniclust2/GiniClust2/GiniClust2_download/Rfunction/"
+exprimentID = "simu"
+
+MinPts = 3
+# parameter for DBSCAN
+eps = 0.5
+# parameter for DBSCAN
+k = 6
+# k for k-means step
+gap_statistic = TRUE
+
+# whether the gap statistic should be used to determine k
+K.max = 10
+# if using the gap statistic, highest k that should be considered
+automatic_eps = TRUE
+# whether to determine eps using KNN
+automatic_minpts = TRUE
+# whether to determine MinPts based on the size of the data set
+
+perplexity_G = 30
+# parameter for Gini tSNE
+perplexity_F = 30
+# parameter for Fano tSNE
+max_iter_G = 1000
+# parameter for Gini tSNE
+max_iter_F = 1000
+# parameter for Fano tSNE
+
+workdir <- "/home/pauling/projects/04_SEmodel/07_NC_revision/03.data/02.Rare.cell.type/01.simulation/03.GiniClust2.res/"
+
+setwd(workdir)
+
+dir.create(file.path(workdir, "results"), showWarnings = FALSE)
+#folder to save results
+dir.create(file.path(workdir, "figures"), showWarnings = FALSE)
+
+source(paste(Rfundir,"GiniClust2_packages.R",sep=""))
+source(paste(Rfundir,"GiniClust2_functions.R",sep=""))
+
+data <- sim_data
+
+source(paste(Rfundir,"GiniClust2_preprocess.R",sep=""))
+source(paste(Rfundir,"GiniClust2_filtering_RawCounts.R",sep=""))
+
+#Gini-based clustering steps
+source(paste(Rfundir,"GiniClust2_fitting.R",sep=""))
+source(paste(Rfundir,"GiniClust2_Gini_clustering.R",sep=""))
+
+#Fano-based clustering steps
+source(paste(Rfundir,"GiniClust2_Fano_clustering.R",sep=""))
+source(paste(Rfundir,"GiniClust2_consensus_clustering.R",sep=""))
+
+source(paste(Rfundir,"GiniClust2_Gini_tSNE.R",sep=""))
+source(paste(Rfundir,"GiniClust2_Fano_tSNE.R",sep=""))
+source(paste(Rfundir,"GiniClust2_DE.R",sep=""))
+source(paste(Rfundir,"GiniClust2_figures.R",sep=""))
+```
+
+
+```{r, fig.width=5.8, fig.height=5}
+Giniclust2.clusters <- finalCluster
+
+tibble(Ground.truth = sim.label,
+       Clusters = paste0("Cluster ",Giniclust2.clusters)) %>%
+  dplyr::count(celltype, Clusters) -> pda
+
+ggplot(pda,aes(y = sqrt(n), axis1 = Ground.truth, axis2 = Clusters)) +
+  geom_alluvium(aes(fill = Clusters), width = 1/8, alpha = alpha, knot.pos = 0.4, colour = "white") +
+  geom_stratum(width = 1/5, color = "grey") +
+  geom_text(stat = "stratum", infer.label = TRUE) +
+  scale_x_continuous(breaks = 1:2, labels = c("Ground truth", "Clusters"))     +
+  scale_fill_manual(values = my.co[-3]) +
+  #scale_color_manual(values = my.co) +
+  theme_void() +
+  theme(
+   axis.text.x = element_text(size = 12, colour = "black")
+  ) -> p
+
+ggsave(plot = p, filename = "03.GiniClust.diagram.pdf", path = fig.path, width = 5.8, height = 5)
+
+p
+```
+
