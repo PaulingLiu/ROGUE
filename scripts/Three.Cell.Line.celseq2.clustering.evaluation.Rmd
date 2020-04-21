@@ -1,0 +1,292 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(SingleCellExperiment);library(tidyverse);library(reticulate);
+library(ggplot2);library(scmap);library(fmsb);
+library(ggsci);library(scibet);library(Seurat);library(M3Drop);
+library(ROCR);library(cluster);library(parallel);library(RaceID);
+library(SC3)
+```
+
+##CelSeq 2
+```{r}
+expr <- readr::read_csv("/home/pauling/projects/04_SEmodel/07_NC_revision/03.data/01.clustering.ari/02.celseq2.3cl/sc_celseq2.count.csv.gz")
+gene.name <- expr$Gene
+expr <- as.matrix(expr[,-1])
+rownames(expr) <- gene.name
+
+cda <- readr::read_csv("/home/pauling/projects/04_SEmodel/07_NC_revision/03.data/01.clustering.ari/02.celseq2.3cl/sc_celseq2.metadata.csv.gz")
+cda <- cda %>% dplyr::select(sample, cell_line) %>% dplyr::rename(label = cell_line)
+```
+
+```{r}
+t_expr <- t(expr)
+res1 <- SE_fun(t_expr, span = 0.2)
+res2 <- m3d_fun(t_expr)
+res3 <- Gini_fun(t_expr)
+res4 <- HVG_fun(t_expr)
+res5 <- sct_fun(t_expr)
+res6 <- FanoFactor_fun(t_expr)
+res7 <- raceid_fun(t_expr)
+
+tibble(method = c("SE","M3Drop","Gini","HVG","SCT","Fano","RaceID"),
+       data = list(res1,res2,res3,res4,res5,res6,res7)) -> diff.gene
+
+out.path <- "/home/pauling/projects/04_SEmodel/07_NC_revision/01.res/02.clustering/02.3cellline.celseq2"
+readr::write_rds(diff.gene,file.path(out.path, "01.diff.gene.rds"))
+```
+
+###################
+
+RaceID3 Clustering
+
+###################
+
+```{r}
+raceid.clustering <- function(expr, var.gene, cda, method = ""){
+  n.cluster <- length(unique(cda$label))
+  GeneNumber <- c(100,500,1000,1500,2000)
+  res <- c()
+  for (i in 1:length(GeneNumber)) {
+    N <- GeneNumber[i]
+    sc <- SCseq(expr[var.gene$Gene[1:N],])
+    sc <- filterdata(sc, mintotal = 1, minexpr = 0, minnumber = 0)
+    sc <- compdist(sc, FSelect = F, metric="pearson")
+    sc <- clustexp(sc, cln=n.cluster, sat=FALSE, bootnr = 20)
+    ari <- mclust::adjustedRandIndex(sc@cluster$kpart, cda$label)
+    tmp <- tibble(ARI = ari, method = method, Number = N)
+    res <- rbind(res,tmp)
+  }
+  return(res)
+}
+```
+
+```{r}
+race.res1 <- raceid.clustering(expr, diff.gene$data[[1]], cda, diff.gene$method[1])
+race.res2 <- raceid.clustering(expr, diff.gene$data[[2]], cda, diff.gene$method[2])
+race.res3 <- raceid.clustering(expr, diff.gene$data[[3]], cda, diff.gene$method[3])
+race.res4 <- raceid.clustering(expr, diff.gene$data[[4]], cda, diff.gene$method[4])
+race.res5 <- raceid.clustering(expr, diff.gene$data[[5]], cda, diff.gene$method[5])
+race.res6 <- raceid.clustering(expr, diff.gene$data[[6]], cda, diff.gene$method[6])
+race.res7 <- raceid.clustering(expr, diff.gene$data[[7]], cda, diff.gene$method[7])
+```
+
+```{r, fig.width=6, fig.height=4}
+race.res <- rbind(race.res1,race.res2,race.res3,race.res4,
+      race.res5,race.res6,race.res7)
+
+race.res %>% readr::write_rds(file.path(out.path,"02.race.res.rds"))
+
+race.res %>%
+  ggplot(aes(Number, ARI)) +
+  geom_line(aes(colour = method), lwd = 0.8) +
+  geom_point(aes(colour = method), size = 2.5) +
+  theme_bw() +
+  scale_colour_d3() +
+  pauling.theme(angle = 0) -> p
+p
+
+fig.path <- "/home/pauling/projects/04_SEmodel/07_NC_revision/02.figures/02.clustering/01.3cellline.celseq2"
+ggsave(plot = p, filename = "02.raceid3.pdf", path = fig.path, width = 6, height = 4)
+```
+
+###################
+
+SC3 Clustering
+
+###################
+
+```{r}
+sce <- SingleCellExperiment(
+    assays = list(
+        counts = as.matrix(expr),
+        logcounts = log2(as.matrix(expr) + 1)
+    )
+)
+rowData(sce)$feature_symbol <- rownames(sce)
+```
+
+```{r}
+sc3.clustering <- function(sce, var.gene, cda, method = ""){
+  GeneNumber <- c(100,500,1000,1500,2000)
+  res <- c()
+  for (i in 1:length(GeneNumber)) {
+    N <- GeneNumber[i]
+    sc <- sce[as.character(var.gene$Gene[1:N]),]
+    sc <- sc3(sc, ks = 3, biology = F, gene_filter = F)
+    ari <- mclust::adjustedRandIndex(sc$sc3_3_clusters, cda$label)
+    tmp <- tibble(ARI = ari, method = method, Number = N)
+    res <- rbind(res,tmp)
+  }
+  return(res)
+}
+
+sc3.res1 <- sc3.clustering(sce, diff.gene$data[[1]], cda, diff.gene$method[1])
+sc3.res2 <- sc3.clustering(sce, diff.gene$data[[2]], cda, diff.gene$method[2])
+sc3.res3 <- sc3.clustering(sce, diff.gene$data[[3]], cda, diff.gene$method[3])
+sc3.res4 <- sc3.clustering(sce, diff.gene$data[[4]], cda, diff.gene$method[4])
+sc3.res5 <- sc3.clustering(sce, diff.gene$data[[5]], cda, diff.gene$method[5])
+sc3.res6 <- sc3.clustering(sce, diff.gene$data[[6]], cda, diff.gene$method[6])
+sc3.res7 <- sc3.clustering(sce, diff.gene$data[[7]], cda, diff.gene$method[7])
+```
+
+```{r, fig.width=6, fig.height=4}
+sc3.res <- rbind(sc3.res1,sc3.res2,sc3.res3,sc3.res4,sc3.res5,sc3.res6,sc3.res7)
+
+sc3.res %>% readr::write_rds(file.path(out.path,"02.sc3.res.rds"))
+
+sc3.res %>%
+  ggplot(aes(Number, ARI)) +
+  geom_line(aes(colour = method), lwd = 0.8) +
+  geom_point(aes(colour = method), size = 2.5) +
+  theme_bw() +
+  scale_colour_d3() +
+  pauling.theme(angle = 0) +
+  ylim(0.9,0.98) -> p
+p
+ggsave(plot = p, filename = "02.sc3.pdf", path = fig.path, width = 6, height = 4)
+```
+
+###################
+
+Seurat Clustering
+
+###################
+
+```{r}
+Cal.ARI.silh <- function(.x, .y, method = ""){
+  
+  ari <- mclust::adjustedRandIndex(Idents(.x), .y$label)
+  tibble(ARI = ari, method = method)
+  
+}
+
+get.ari.sl <- function(.x, DiffGene, cda, resolution, gene.numbers, method, n.cluster){
+  ari.sl.res <- c()
+  for (i in 1:length(gene.numbers)) {
+    sce.tmp <- RunPCA(.x, features = DiffGene$Gene[1:gene.numbers[i]])
+    sce.tmp <- FindNeighbors(sce.tmp, dims = 1:20)
+    sce.tmp <- FindClusters(sce.tmp, resolution = resolution)
+    if(length(levels(Idents(sce.tmp))) == n.cluster){
+      ari.sl <- Cal.ARI.silh(sce.tmp, cda, method) %>% 
+        dplyr::mutate(Number = gene.numbers[i])
+      
+      ari.sl.res <- rbind(ari.sl.res,ari.sl)
+    }
+  }
+  return(ari.sl.res)
+}
+```
+
+```{r}
+sce <- CreateSeuratObject(counts = expr)
+sce <- NormalizeData(sce, normalization.method = "LogNormalize", scale.factor = 10000)
+all.genes <- rownames(sce)
+sce <- ScaleData(sce, features = all.genes, do.center = F, do.scale = F)
+
+sce.se <- RunPCA(sce, features = diff.gene$data[[1]]$Gene[1:30])
+sce.se <- FindNeighbors(sce.se, dims = 1:20)
+sce.se <- RunUMAP(sce.se, dims = 1:20)
+sce.se <- FindClusters(sce.se, resolution = 0.2)
+DimPlot(sce.se, reduction = "umap")
+
+GeneNumer <- c(100,500,1000,1500,2000)
+se.ari.sl <- get.ari.sl(sce, diff.gene$data[[1]], cda, 0.2, GeneNumer, "SE", 3)
+```
+
+```{r}
+sce.M3Drop <- RunPCA(sce, features = diff.gene$data[[2]]$Gene[1:30])
+sce.M3Drop <- FindNeighbors(sce.M3Drop, dims = 1:20)
+sce.M3Drop <- FindClusters(sce.M3Drop, resolution = 0.8)
+sce.M3Drop <- RunUMAP(sce.M3Drop, dims = 1:20)
+DimPlot(sce.M3Drop)
+
+se.ari.M3D <- get.ari.sl(sce, diff.gene$data[[2]], cda, 0.8, GeneNumer, "M3Drop", 3)
+```
+
+
+```{r}
+sce.gini <- RunPCA(sce, features = diff.gene$data[[3]]$Gene[1:30])
+sce.gini <- FindNeighbors(sce.gini, dims = 1:20)
+sce.gini <- FindClusters(sce.gini, resolution = 0.2)
+sce.gini <- RunUMAP(sce.gini, dims = 1:20)
+DimPlot(sce.gini, reduction = "umap")
+
+se.ari.gini <- get.ari.sl(sce, diff.gene$data[[3]], cda, 0.2, GeneNumer, "Gini",3)
+```
+
+```{r}
+sce.hvg <- RunPCA(sce, features = diff.gene$data[[4]]$Gene[1:100])
+sce.hvg <- FindNeighbors(sce.hvg, dims = 1:20)
+sce.hvg <- RunUMAP(sce.hvg, dims = 1:20)
+sce.hvg <- FindClusters(sce.hvg, resolution = 1)
+DimPlot(sce.hvg, reduction = "umap")
+
+se.ari.hvg <- get.ari.sl(sce, diff.gene$data[[4]], cda, 1, GeneNumer, "HVG",3)
+```
+
+```{r}
+sce.sct <- RunPCA(sce, features = diff.gene$data[[5]]$Gene[1:100])
+sce.sct <- FindNeighbors(sce.sct, dims = 1:20)
+sce.sct <- RunUMAP(sce.sct, dims = 1:20)
+sce.sct <- FindClusters(sce.sct, resolution = 0.2)
+DimPlot(sce.sct, reduction = "umap")
+
+se.ari.sct <- get.ari.sl(sce, diff.gene$data[[5]], cda, 0.2, GeneNumer, "SCT", 3)
+```
+
+```{r}
+sce.fano <- RunPCA(sce, features = diff.gene$data[[6]]$Gene[1:100])
+sce.fano <- FindNeighbors(sce.fano, dims = 1:20)
+sce.fano <- FindClusters(sce.fano, resolution = 0.2)
+sce.fano <- RunUMAP(sce.fano, dims = 1:20)
+DimPlot(sce.fano, reduction = "umap")
+
+se.ari.fano <- get.ari.sl(sce, diff.gene$data[[6]], cda, 0.2, GeneNumer, "Fano", 3)
+```
+
+```{r}
+sce.race <- RunPCA(sce, features = diff.gene$data[[7]]$Gene[1:100])
+sce.race <- FindNeighbors(sce.race, dims = 1:20)
+sce.race <- FindClusters(sce.race, resolution = 0.2)
+sce.race <- RunUMAP(sce.race, dims = 1:20)
+DimPlot(sce.race, reduction = "umap")
+
+se.ari.race <- get.ari.sl(sce, diff.gene$data[[7]], cda, 0.2, GeneNumer, "RaceID",3)
+```
+
+
+```{r}
+pauling.theme <- function(poi = "right", size = 12, title.size = 15, angle){
+  theme(
+    legend.position = poi,
+    axis.title = element_text(size = title.size,color="black"),
+    axis.text = element_text(size = size,color="black"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    axis.text.y = element_text(color="black"),
+    axis.text.x = element_text(color="black", angle = angle, hjust = 1))
+}
+```
+
+```{r, fig.width=6, fig.height=4}
+seurat.res <- rbind(se.ari.sl, se.ari.gini, se.ari.fano, se.ari.sct, 
+                    se.ari.race, se.ari.M3D, se.ari.hvg)
+  
+seurat.res %>% readr::write_rds(file.path(out.path,"02.seurat.res.rds"))
+
+seurat.res %>% 
+  ggplot(aes(Number, ARI)) +
+  geom_line(aes(colour = method), lwd = 0.8) +
+  geom_point(aes(colour = method), size = 2.5) +
+  theme_bw() +
+  scale_colour_d3() +
+  pauling.theme(angle = 0) -> p
+p
+ggsave(plot = p, filename = "02..seurat.pdf", path = fig.path, width = 6, height = 4)
+```
+
+
