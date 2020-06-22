@@ -11,7 +11,7 @@
 - [Contact](#Contact)
 
 ## Overview
-Often, it is not even clear whether a given cluster is uniform in unsupervised scRNA-seq data analyses. Here, we proposed the concept of cluster purity and introduced a conceptually novel statistic, named ROGUE, to examine whether a given cluster is a pure cell population. (bioRxiv preprint link [here](https://www.biorxiv.org/content/10.1101/819581v1)).
+Often, it is not even clear whether a given cluster is uniform in unsupervised scRNA-seq data analyses. Here, we proposed the concept of cluster purity and introduced a conceptually novel statistic, named ROGUE, to examine whether a given cluster is a pure cell population.
 
 ## Installation Guide
 **Installing dependency package**  
@@ -35,7 +35,7 @@ The scripts for producing all the quantitative results in our manuscript can be 
 
 ## Citation
 If you use ROGUE in your research, please considering citing:
-- [Liu et al., bioRxiv 2019](https://www.biorxiv.org/content/10.1101/819581v1)
+- [Liu et al., Nature Communications 2020](https://www.nature.com/articles/s41467-020-16904-3)
 
 ## Contact
 Please contact us:  
