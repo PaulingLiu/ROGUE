@@ -9,17 +9,32 @@
 #'
 #' @examples
 Entropy <- function(expr, r = 1){
-  tmp <- log(expr+1)
-  entropy <- Matrix::rowMeans(tmp)
-  mean.expr <- log(Matrix::rowMeans(expr)+r)
-
-  ent_res <- tibble(
-    Gene = rownames(expr),
-    mean.expr = mean.expr,
-    entropy = entropy
-  )
-
-  return(ent_res)
+  if(is(expr,"dgCMatrix")){
+    tmp <- expr
+    tmp@x<-log(tmp@x+1)
+    entropy <- Matrix::rowMeans(tmp)
+    mean.expr <- log(Matrix::rowMeans(expr)+r)
+    
+    ent_res <- tibble(
+      Gene = rownames(expr),
+      mean.expr = mean.expr,
+      entropy = entropy
+    )
+    
+    return(ent_res)
+  }else{
+    tmp <- log(expr+1)
+    entropy <- rowMeans(tmp)
+    mean.expr <- log(rowMeans(expr)+r)
+    
+    ent_res <- tibble(
+      Gene = rownames(expr),
+      mean.expr = mean.expr,
+      entropy = entropy
+    )
+    
+    return(ent_res)
+  }
 }
 
 
