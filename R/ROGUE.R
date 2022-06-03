@@ -43,7 +43,7 @@ Entropy <- function(expr, r = 1){
 #' @description Fit the relationship between expression entropy and mean gene expression using loess regression.
 #' @usage entropy_fit(.x, span = 0.5, mt.method = c("fdr","BH"))
 #' @param .x A tibble object returned from the Entropy function.
-#' @param span The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.
+#' @param span The parameter α which controls the degree of smoothing.
 #' @param mt.method The multiple testing method used in p.adjust.
 #' @return A tibble object with six columns.
 #' @export
@@ -86,9 +86,10 @@ entropy_fit <- function(.x, span = 0.5, mt.method = "fdr"){
 #' Identify highly informative genes using S-E model
 #' @description Use S-E curve to identify highly informative genes.
 #' @param expr The expression matrix. Rows should be genes and columns should be cells.
-#' @param span The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.
+#' @param span The parameter α which controls the degree of smoothing.
 #' @param r A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.
 #' @param mt.method The multiple testing method used in p.adjust.
+#' @param if.adj Whether to apply multiple testing method to adjust p.value.
 #' @return A tibble object with seven columns:
 #' @return * Gene, the gene name.
 #' @return * mean.expr, the mean expression levels of genes.
@@ -101,9 +102,12 @@ entropy_fit <- function(.x, span = 0.5, mt.method = "fdr"){
 #' @export
 #'
 #' @examples ent.res <- SE_fun(expr, span = 0.1, r = 1, mt.method = "fdr")
-SE_fun <- function(expr, span = 0.5, r = 1, mt.method = "fdr"){
-  ent_res <- Entropy(expr, r = r)
-  ent_res <- entropy_fit(ent_res, span = span, mt.method = mt.method)
+SE_fun <- function(expr, span = 0.5, r = 1, mt.method = "fdr", if.adj = T){
+  ent_res <- ROGUE::Entropy(expr, r = r)
+  ent_res <- ROGUE::entropy_fit(ent_res, span = span, mt.method = mt.method)
+  if(!isTRUE(if.adj)){
+    ent_res <- ent_res %>% dplyr::mutate(p.adj = p.value)
+  }
   return(ent_res)
 }
 
@@ -287,7 +291,7 @@ CalculateRogue <- function(.x, platform = NULL, cutoff = 0.05, k = NULL, feature
 #' @param ent A tibble object returned from the SE_fun or entropy_fit function.
 #' @param expr The expression matrix. Rows should be genes and columns should be cells.
 #' @param n Remove this many outlier cells.
-#' @param span The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.
+#' @param span The parameter α which controls the degree of smoothing.
 #' @param r A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.
 #' @param mt.method The multiple testing method used in p.adjust.
 #'
@@ -326,17 +330,20 @@ ent.toli <- function(ent, expr, n = 2, span = 0.5, r = 1, mt.method = "fdr"){
 #' @param expr The expression matrix. Rows should be genes and columns should be cells.
 #' @param labels A vector of cell cluster lables for all cells corresponding to 'expr' argument.
 #' @param samples A vector of samples (e.g. patients) to which each cell belongs, corresponding to 'expr' argument.
-#' @param min.cell.n Include genes detected in at least this many cells.
+#' @param min.cell.n Only clusters containing at least this many cells will receive ROGUE values.
 #' @param remove.outlier.n Remove this many outlier cells when calculating ROGUE.
-#' @param span The parameter α which controls the degree of smoothing.To improve the performance, we recommend small values of span such as 0.01 and 0.1 if feasible.
+#' @param span The parameter α which controls the degree of smoothing.
 #' @param r A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.
+#' @param filter Logical, whether to filter out low-abundance genes and low-quality cells.
+#' @param min.cells if parameter filter is "TRUE", include genes detected in at least this many cells.
+#' @param min.genes if parameter filter is "TRUE", Include cells where at least this many genes are detected.
 #' @param mt.method The multiple testing method used in p.adjust.
 #'
 #' @return A dataframe where rows represent samples, cols represent clusters, and values represent corresponding ROGUEs.
 #' @export
 #'
 #' @examples
-rogue <- function(expr, labels, samples, platform = NULL, k = NULL, min.cell.n = 10, remove.outlier.n = 2, span = 0.5, r = 1, mt.method = "fdr"){
+rogue <- function(expr, labels, samples, platform = NULL, k = NULL, min.cell.n = 10, remove.outlier.n = 2, span = 0.5, r = 1, filter = F, min.cells = 10, min.genes = 10, mt.method = "fdr"){
   clusters <- unique(labels)
   meta <- tibble(CellID = 1:ncol(expr), ct = labels, sample = samples)
   sample.rogue <- function(meta, cluster){
@@ -347,6 +354,12 @@ rogue <- function(expr, labels, samples, platform = NULL, k = NULL, min.cell.n =
       index1 <- tmp %>% dplyr::filter(sample == s[i]) %>% dplyr::pull(CellID)
       if(length(index1) >= min.cell.n){
         tmp.matr <- expr[,index1]
+        if(isTRUE(filter)){
+          print("Filtering out low-abundance genes and low-quality cells")
+          tmp.matr <- matr.filter(tmp.matr, min.cells = min.cells, min.genes = min.genes)
+        }else{
+          tmp.matr <- tmp.matr
+        }
         tmp.res <- SE_fun(tmp.matr, span = span, r = r)
         tmp.res <- ent.toli(tmp.res, tmp.matr, span = span, r = r, n = remove.outlier.n)
         rogue[i] <- CalculateRogue(tmp.res, platform = platform, k = k)
@@ -375,7 +388,7 @@ rogue <- function(expr, labels, samples, platform = NULL, k = NULL, min.cell.n =
 #' @description Draws a boxplot of the ROGUE values for each cluster in different samples.
 #' @param res.rogue A dataframe returned from the 'rogue' function.
 #'
-#' @return A ggplot object
+#' @return A ggplot object.
 #' @export
 #'
 #' @examples res.rogue <- rogue(expr, labels, samples)
@@ -394,4 +407,28 @@ rogue.boxplot <- function(res.rogue){
       y = "ROGUE"
     ) -> p
   return(p)
+}
+
+
+#' Calculate the value of the reference factor K
+#' @description Determine the value of the reference factor K by specifying a highly heterogeneous dataset
+#' @param expr The expression matrix. Rows should be genes and columns should be cells.
+#' @param span The parameter α which controls the degree of smoothing.To improve the performance.
+#' @param r A small fixed value to avoid log(0) of mean gene expression levels. The default value of r is set to 1, but can also be set to other values such as 0.1 and 0.01.
+#' @param mt.method The multiple testing method used in p.adjust.
+#' @param if.adj Whether to apply multiple testing method to adjust p.value.
+#' @return The K value
+#'
+#' @export
+#'
+#' @examples k <- DetermineK(expr, span = 0.5, r = 1, mt.method = "fdr")
+DetermineK <- function(expr, span = 0.5, r = 1, mt.method = "fdr", if.adj = T){
+  ent_res <- ROGUE::Entropy(expr, r = r)
+  ent_res <- ROGUE::entropy_fit(ent_res, span = span, mt.method = mt.method)
+  if(!isTRUE(if.adj)){
+    ent_res <- ent_res %>% dplyr::mutate(p.adj = p.value)
+  }
+  k <- ent_res %>% dplyr::filter(p.adj < 0.05) %>% dplyr::pull(ds) %>% sum()
+  k <- k/2
+  return(k)
 }
